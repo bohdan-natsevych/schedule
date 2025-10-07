@@ -1,0 +1,406 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f8f9fb;
+  color: #1f2933;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.app-shell {
+  display: flex;
+  flex: 1;
+}
+
+.sidebar {
+  width: 320px;
+  padding: 1.5rem;
+  border-right: 1px solid #dbe1e8;
+  background-color: #ffffff;
+  overflow-y: auto;
+}
+
+.main-content {
+  flex: 1;
+  padding: 1.5rem;
+  overflow: hidden;
+}
+
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.form-field label {
+  font-weight: 600;
+}
+
+.form-field input,
+.form-field select,
+.form-field textarea {
+  padding: 0.5rem;
+  border: 1px solid #c7d0db;
+  border-radius: 0.5rem;
+}
+
+.button-group {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.primary-button {
+  background-color: #2563eb;
+  color: #fff;
+  border: none;
+  padding: 0.6rem 1rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.secondary-button {
+  background-color: #e5e7eb;
+  color: #111827;
+  border: none;
+  padding: 0.6rem 1rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.task-list {
+  margin-top: 1.5rem;
+}
+
+.task-card {
+  background-color: #f1f5f9;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  margin-bottom: 0.75rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.task-card h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.calendar-container {
+  height: calc(100vh - 3rem);
+  background-color: #ffffff;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+}
+
+.print-preview-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.print-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.print-controls {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  padding: 1rem;
+}
+
+.print-editor-wrapper {
+  padding: 0 0.7cm 2rem 0.7cm;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.print-editor {
+  background: #ffffff;
+  border: 1px dashed #cbd5f5;
+  padding: 1.5cm 1cm;
+  min-height: 280mm;
+  outline: none;
+  cursor: text;
+}
+
+.print-editor:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.print-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: var(--line-gap, 6px);
+}
+
+.print-line:last-child {
+  margin-bottom: 0;
+}
+
+.print-line img {
+  max-width: 150px;
+  max-height: 150px;
+  object-fit: contain;
+  margin-left: 1rem;
+}
+
+.print-line-text {
+  flex: 1;
+  white-space: pre-wrap;
+}
+
+.page-break {
+  break-after: page;
+  width: 100%;
+  height: 0;
+}
+
+.warning {
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  background-color: #fef3c7;
+  color: #92400e;
+  font-weight: 600;
+}
+
+.icon-resize {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.icon-resize input {
+  width: 80px;
+}
+
+.rbc-month-view .rbc-day-bg.rbc-selected-day {
+  background-color: #e0e7ff !important;
+  border: 2px solid #4338ca;
+}
+
+@page {
+  size: A4;
+  margin: 0;
+}
+
+@media print {
+  body {
+    background: #ffffff;
+    margin: 0;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-preview {
+    gap: 0;
+  }
+
+  .print-editor-wrapper {
+    padding: 0;
+  }
+
+  .print-editor {
+    border: none;
+    padding: 1cm;
+    min-height: auto;
+  }
+}
+
+.weekday-selector {
+  position: relative;
+  border: 1px solid #c7d0db;
+  border-radius: 8px;
+  padding: 0.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.weekday-selector-input {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  align-items: center;
+  flex: 1;
+}
+
+.weekday-selector-input input {
+  border: none;
+  outline: none;
+  min-width: 120px;
+  padding: 0.25rem;
+  flex: 1;
+}
+
+.weekday-chip {
+  background-color: #2563eb;
+  color: #ffffff;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.weekday-chip-remove {
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.weekday-selector-suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border: 1px solid #c7d0db;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15);
+  list-style: none;
+  padding: 0.25rem;
+  margin: 0;
+  z-index: 10;
+}
+
+.weekday-selector-suggestions li button {
+  width: 100%;
+  padding: 0.5rem;
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.weekday-selector-suggestions li button:hover {
+  background-color: #eef2ff;
+}
+
+.print-page-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 0 0.7cm;
+}
+
+.print-page {
+  background: #ffffff;
+  border: 1px dashed #cbd5f5;
+  padding: 1rem 0.5rem;
+  page-break-after: always;
+  display: flex;
+  flex-direction: column;
+  min-height: 297mm;
+}
+
+.print-page:last-child {
+  page-break-after: auto;
+}
+
+.print-page-items {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.print-page-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  break-inside: avoid;
+}
+
+.print-page-item img {
+  max-width: 150px;
+  max-height: 150px;
+  object-fit: contain;
+}
+
+.page-number {
+  text-align: right;
+  font-weight: 600;
+  margin-top: 0.5rem;
+}
+
+@media print {
+  body {
+    background: #ffffff;
+    margin: 0;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-page-stack {
+    padding: 0;
+    gap: 0;
+  }
+
+  .print-page {
+    border: none;
+    padding: 0 0.7cm;
+    page-break-after: always;
+  }
+
+  .page-number {
+    padding-bottom: 0.5cm;
+  }
+}
+
+.print-measure {
+  position: absolute;
+  left: -9999px;
+  top: -9999px;
+  width: 210mm;
+  padding: 0 0.7cm;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
