@@ -142,6 +142,13 @@ textarea {
   padding: 1rem;
 }
 
+.page-count-indicator {
+  font-weight: 600;
+  padding: 0.5rem 0.75rem;
+  background-color: #eef2ff;
+  border-radius: 0.5rem;
+}
+
 .print-editor-wrapper {
   padding: 0 0.7cm 2rem 0.7cm;
   display: flex;
@@ -403,4 +410,103 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+/* Modal styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: #fff;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.modal-content h2 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  font-size: 1.5rem;
+}
+
+/* Event time editor styles */
+.event-time-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.event-time-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid #dbe1e8;
+  border-radius: 0.5rem;
+  background-color: #f8f9fb;
+}
+
+.event-time-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.icon-button {
+  background-color: #e5e7eb;
+  border: none;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.icon-button:hover:not(:disabled) {
+  background-color: #d1d5db;
+}
+
+.icon-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.time-input {
+  padding: 0.5rem;
+  border: 1px solid #c7d0db;
+  border-radius: 0.5rem;
+  min-width: 120px;
+}
+
+.event-title {
+  flex: 1;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.event-recurrence-badge {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  background-color: #dbeafe;
+  color: #1e40af;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
 }

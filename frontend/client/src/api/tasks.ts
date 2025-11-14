@@ -8,12 +8,17 @@ import {
 } from "../types";
 
 export const fetchTasks = async (): Promise<Task[]> => {
-  const { data } = await api.get<Task[]>("/tasks");
-  return data;
+  try {
+    const { data } = await api.get<Task[]>("/tasks/");
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error("Failed to fetch tasks:", error);
+    return [];
+  }
 };
 
 export const createTask = async (payload: TaskCreate): Promise<Task> => {
-  const { data } = await api.post<Task>("/tasks", payload);
+  const { data } = await api.post<Task>("/tasks/", payload);
   return data;
 };
 

@@ -1,4 +1,44 @@
-backend
-frontend/client/node_modules
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
 .venv
+venv/
+ENV/
+env/
 
+# Database
+backend/schedule.db
+*.db
+
+# Uploads
+uploads/
+backend/uploads/
+
+# Node
+node_modules/
+frontend/client/node_modules/
+frontend/client/dist/
+
+# Build artifacts
+build/
+dist/
+Output/
+*.spec.bak
+*.pyc
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

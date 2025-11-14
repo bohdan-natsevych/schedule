@@ -3,11 +3,19 @@ import { useQuery } from "@tanstack/react-query";
 
 import Header from "../components/Header";
 import { preparePrint } from "../api/tasks";
+import { sendHeartbeat } from "../api/client";
 import { PrintRequest, TaskOccurrence } from "../types";
 
-const todayISOString = new Date().toISOString().slice(0, 10);
-const defaultFrom = todayISOString;
-const defaultTo = todayISOString;
+const formatDate = (date: Date) => date.toISOString().slice(0, 10);
+
+const today = new Date();
+const defaultFrom = formatDate(today);
+const sixMonthsFromToday = (() => {
+  const future = new Date(today);
+  future.setMonth(future.getMonth() + 6);
+  return formatDate(future);
+})();
+const defaultTo = sixMonthsFromToday;
 
 interface EditorSettings {
   lineGap: number;
@@ -28,6 +36,8 @@ export default function PrintPreview() {
   const [settings, setSettings] = useState<EditorSettings>(DEFAULT_SETTINGS);
   const [customLines, setCustomLines] = useState<TaskOccurrence[]>([]);
   const editorRef = useRef<HTMLDivElement | null>(null);
+  const [pageCount, setPageCount] = useState(1);
+  const pageHeightRef = useRef<number | null>(null);
 
   const query = useQuery({
     queryKey: ["print", filters],
@@ -39,6 +49,23 @@ export default function PrintPreview() {
   useEffect(() => {
     setCustomLines(occurrences);
   }, [occurrences]);
+
+  // Heartbeat to keep server alive
+  useEffect(() => {
+    // Send initial heartbeat
+    sendHeartbeat();
+
+    // Send heartbeat every 3 seconds
+    const heartbeatInterval = setInterval(() => {
+      sendHeartbeat();
+    }, 3000);
+
+    // CURSOR: Removed automatic shutdown on beforeunload as it triggers on page refresh
+
+    return () => {
+      clearInterval(heartbeatInterval);
+    };
+  }, []);
 
   const warning = useMemo(() => {
     if (!query.data) return null;
@@ -84,6 +111,72 @@ export default function PrintPreview() {
 
     setCustomLines(updated);
   };
+
+  useEffect(() => {
+    const node = editorRef.current;
+    if (!node) return;
+
+    const resolvePageHeight = () => {
+      if (pageHeightRef.current !== null) {
+        return pageHeightRef.current;
+      }
+
+      if (typeof window === "undefined") {
+        return 0;
+      }
+
+      const div = document.createElement("div");
+      div.style.position = "absolute";
+      div.style.visibility = "hidden";
+      div.style.height = "297mm";
+      div.style.width = "1px";
+      div.style.pointerEvents = "none";
+      document.body.appendChild(div);
+      const height = div.getBoundingClientRect().height;
+      document.body.removeChild(div);
+      pageHeightRef.current = height;
+      return height;
+    };
+
+    let timeoutId: number | undefined;
+    const updatePageCount = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => {
+        const pageHeight = resolvePageHeight();
+        if (!pageHeight) return;
+        const totalHeight = node.scrollHeight;
+        const pages = Math.max(1, Math.ceil(totalHeight / pageHeight));
+        setPageCount((prev) => (prev === pages ? prev : pages));
+      }, 100);
+    };
+
+    updatePageCount();
+
+    const observer =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => updatePageCount())
+        : undefined;
+    observer?.observe(node);
+
+    const handleResize = () => updatePageCount();
+    window.addEventListener("resize", handleResize);
+
+    const images = Array.from(node.querySelectorAll("img"));
+    const cleanupImageListeners = images
+      .filter((img) => !img.complete)
+      .map((img) => {
+        const handleLoad = () => updatePageCount();
+        img.addEventListener("load", handleLoad, { once: true });
+        return () => img.removeEventListener("load", handleLoad);
+      });
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      observer?.disconnect();
+      window.removeEventListener("resize", handleResize);
+      cleanupImageListeners.forEach((cleanup) => cleanup());
+    };
+  }, [customLines, filters.font_size, settings.fontFamily, settings.lineGap]);
 
   return (
     <div className="print-preview" style={{ gap: "1rem" }}>
@@ -145,6 +238,9 @@ export default function PrintPreview() {
         <button type="button" className="primary-button" onClick={() => window.print()}>
           Print (A4 portrait)
         </button>
+        <div className="page-count-indicator" aria-live="polite">
+          Estimated pages: <span>{pageCount}</span>
+        </div>
       </section>
 
       {warning && <div className="warning no-print">{warning}</div>}

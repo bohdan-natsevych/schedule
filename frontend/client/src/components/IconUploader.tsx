@@ -18,8 +18,8 @@ export default function IconUploader({
   onResize,
 }: IconUploaderProps) {
   const [preview, setPreview] = useState(iconPath ?? null);
-  const [width, setWidth] = useState(iconWidth);
-  const [height, setHeight] = useState(iconHeight);
+  const [width, setWidth] = useState(iconWidth ?? 150);
+  const [height, setHeight] = useState(iconHeight ?? 150);
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -28,13 +28,13 @@ export default function IconUploader({
   };
 
   const handleResize = () => {
-    onResize({ icon_width: width, icon_height: height });
+    onResize({ icon_width: width ?? 150, icon_height: height ?? 150 });
   };
 
   useEffect(() => {
     setPreview(iconPath ?? null);
-    setWidth(iconWidth);
-    setHeight(iconHeight);
+    setWidth(iconWidth ?? 150);
+    setHeight(iconHeight ?? 150);
   }, [iconPath, iconHeight, iconWidth]);
 
   return (
@@ -46,8 +46,8 @@ export default function IconUploader({
           <img
             src={preview}
             alt="Task icon"
-            width={width}
-            height={height}
+            width={width ?? 150}
+            height={height ?? 150}
             style={{ display: "block", marginTop: "0.5rem" }}
           />
           <div className="icon-resize">
@@ -57,7 +57,7 @@ export default function IconUploader({
                 type="number"
                 min={50}
                 max={300}
-                value={width}
+                value={width ?? 150}
                 onChange={(e) => setWidth(Number(e.target.value))}
               />
             </label>
@@ -67,7 +67,7 @@ export default function IconUploader({
                 type="number"
                 min={50}
                 max={300}
-                value={height}
+                value={height ?? 150}
                 onChange={(e) => setHeight(Number(e.target.value))}
               />
             </label>

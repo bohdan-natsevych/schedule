@@ -7,11 +7,12 @@ import { Task, Recurrence, TaskCreate } from "../types";
 
 interface TaskFormProps {
   onSubmit: (data: TaskCreate) => void;
+  onCancel?: () => void;
   defaultValues?: Partial<Task>;
   submitting?: boolean;
 }
 
-export default function TaskForm({ onSubmit, defaultValues, submitting }: TaskFormProps) {
+export default function TaskForm({ onSubmit, onCancel, defaultValues, submitting }: TaskFormProps) {
   const today = format(new Date(), "yyyy-MM-dd");
 
   const parseDate = (value?: string | null) => {
@@ -34,6 +35,7 @@ export default function TaskForm({ onSubmit, defaultValues, submitting }: TaskFo
   const initialEndDate = defaultValues?.end_date
     ?? (initialRecurrence === "once" ? initialStartDate : addOneYear(initialStartDate));
   const initialWeekdayMask = defaultValues?.weekday_mask ?? "";
+  const initialStartTime = defaultValues?.start_time ?? "09:00";
 
   const {
     register,
@@ -46,6 +48,7 @@ export default function TaskForm({ onSubmit, defaultValues, submitting }: TaskFo
     defaultValues: {
       title: defaultValues?.title ?? "",
       start_date: initialStartDate,
+      start_time: initialStartTime,
       end_date: initialEndDate,
       recurrence: initialRecurrence,
       weekday_mask: initialWeekdayMask,
@@ -58,6 +61,7 @@ export default function TaskForm({ onSubmit, defaultValues, submitting }: TaskFo
     reset({
       title: defaultValues?.title ?? "",
       start_date: start,
+      start_time: defaultValues?.start_time ?? "09:00",
       end_date:
         defaultValues?.end_date
           ?? (recurrenceValue === "once" ? start : addOneYear(start)),
@@ -117,6 +121,15 @@ export default function TaskForm({ onSubmit, defaultValues, submitting }: TaskFo
         <input type="date" {...register("start_date", { required: true })} />
       </div>
 
+      <div className="form-field">
+        <label>Time *</label>
+        <input 
+          type="time" 
+          {...register("start_time", { required: true })} 
+        />
+        {errors.start_time && <small>Time is required.</small>}
+      </div>
+
       {recurrence !== "once" && (
         <div className="form-field">
           <label>End date</label>
@@ -149,9 +162,15 @@ export default function TaskForm({ onSubmit, defaultValues, submitting }: TaskFo
         <button type="submit" className="primary-button" disabled={submitting}>
           {submitting ? "Saving..." : "Save Task"}
         </button>
-        <button type="button" className="secondary-button" onClick={() => reset()}>
-          Clear
-        </button>
+        {onCancel ? (
+          <button type="button" className="secondary-button" onClick={onCancel}>
+            Cancel Edit
+          </button>
+        ) : (
+          <button type="button" className="secondary-button" onClick={() => reset()}>
+            Clear
+          </button>
+        )}
       </div>
     </form>
   );

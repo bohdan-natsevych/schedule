@@ -6,6 +6,7 @@ import TaskForm from "../components/TaskForm";
 import TaskList from "../components/TaskList";
 import CalendarView from "../components/CalendarView";
 import IconUploader from "../components/IconUploader";
+import EventTimeEditor from "../components/EventTimeEditor";
 import {
   createTask,
   deleteTask,
@@ -13,6 +14,8 @@ import {
   updateTask,
   uploadTaskIcon,
 } from "../api/tasks";
+import { fetchAllOverrides, upsertOverride } from "../api/overrides";
+import { sendHeartbeat } from "../api/client";
 import { Task, TaskCreate, TaskUpdate } from "../types";
 import { differenceInCalendarDays, parseISO } from "date-fns";
 
@@ -22,8 +25,13 @@ export default function App() {
     queryKey: ["tasks"],
     queryFn: fetchTasks,
   });
+  const { data: overrides = [] } = useQuery({
+    queryKey: ["overrides"],
+    queryFn: fetchAllOverrides,
+  });
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
+  const [editingEventDate, setEditingEventDate] = useState<Date | null>(null);
 
   const createMutation = useMutation({
     mutationFn: createTask,
@@ -50,11 +58,10 @@ export default function App() {
   const handleSubmit = (data: TaskCreate) => {
     const payload: TaskCreate = {
       ...data,
-      start_time: null,
       end_time: null,
       description: null,
       font_size: null,
-      is_all_day: true,
+      is_all_day: false,
       weekday_mask: data.recurrence === "weekly" ? data.weekday_mask : null,
     };
 
@@ -68,6 +75,10 @@ export default function App() {
 
   const handleEdit = (task: Task) => {
     setSelectedTask(task);
+  };
+
+  const handleCancelEdit = () => {
+    setSelectedTask(null);
   };
 
   const handleDelete = (task: Task) => {
@@ -90,6 +101,11 @@ export default function App() {
     });
   };
 
+  const handleUpdateEventTime = async (taskId: number, date: string, startTime: string | null) => {
+    await upsertOverride(taskId, date, startTime, null);
+    queryClient.invalidateQueries({ queryKey: ["overrides"] });
+  };
+
   useEffect(() => {
     if (!selectedTask) return;
     const updated = tasks.find((task) => task.id === selectedTask.id);
@@ -97,6 +113,23 @@ export default function App() {
       setSelectedTask(updated);
     }
   }, [tasks, selectedTask?.id]);
+
+  // Heartbeat to keep server alive
+  useEffect(() => {
+    // Send initial heartbeat
+    sendHeartbeat();
+
+    // Send heartbeat every 3 seconds
+    const heartbeatInterval = setInterval(() => {
+      sendHeartbeat();
+    }, 3000);
+
+    // CURSOR: Removed automatic shutdown on beforeunload as it triggers on page refresh
+
+    return () => {
+      clearInterval(heartbeatInterval);
+    };
+  }, []);
 
   const defaultStartDate = useMemo(() => {
     if (!selectedDate) return new Date().toISOString().slice(0, 10);
@@ -110,9 +143,10 @@ export default function App() {
       <Header />
       <div className="app-shell">
         <aside className="sidebar">
-          <h2 style={{ marginTop: 0 }}>Create Task</h2>
+          <h2 style={{ marginTop: 0 }}>{selectedTask ? 'Edit Task' : 'Create Task'}</h2>
           <TaskForm
             onSubmit={handleSubmit}
+            onCancel={selectedTask ? handleCancelEdit : undefined}
             submitting={createMutation.isPending || updateMutation.isPending}
             defaultValues={{
               ...(selectedTask ?? {}),
@@ -146,12 +180,24 @@ export default function App() {
           <div className="calendar-container">
             <CalendarView
               tasks={tasks}
+              overrides={overrides}
               selectedDate={selectedDate}
               onSelectDate={(date) => setSelectedDate(date)}
+              onEditDayEvents={(date) => setEditingEventDate(date)}
             />
           </div>
         </main>
       </div>
+
+      {editingEventDate && (
+        <EventTimeEditor
+          date={editingEventDate}
+          tasks={tasks}
+          overrides={overrides}
+          onUpdateTime={handleUpdateEventTime}
+          onClose={() => setEditingEventDate(null)}
+        />
+      )}
     </div>
   );
 }
