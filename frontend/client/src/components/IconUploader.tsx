@@ -215,7 +215,7 @@ const IconUploader = forwardRef<IconUploaderRef, IconUploaderProps>(({
 
   return (
     <div className="icon-uploader-container">
-      <label htmlFor={`icon-${taskId}`} className="icon-upload-label">Icon (optional)</label>
+      <label htmlFor={`icon-${taskId}`} className="form-field-label">Icon</label>
       <div className="file-input-wrapper">
         <label htmlFor={`icon-${taskId}`} className="file-input-button">
           Choose File

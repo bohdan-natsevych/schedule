@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Calendar, dateFnsLocalizer, Event, View } from "react-big-calendar";
 import { format, parse, startOfWeek, getDay, parseISO } from "date-fns";
 
@@ -38,6 +38,8 @@ export default function CalendarView({
   onEditDayEvents,
 }: CalendarViewProps) {
   const [view, setView] = useState<View>("month");
+  const [lastClickTime, setLastClickTime] = useState<number>(0);
+  const [lastClickedDate, setLastClickedDate] = useState<Date | null>(null);
 
   const events = useMemo<CalendarEvent[]>(() => {
     // CURSOR: Build a map of overrides by task_id and date for quick lookup
@@ -138,12 +140,56 @@ export default function CalendarView({
   }, [tasks, overrides]);
 
   const handleSelectSlot = ({ start }: { start: Date }) => {
-    onSelectDate?.(start);
+    const now = Date.now();
+    const timeDiff = now - lastClickTime;
+    
+    // Check if this is a double-click (within 300ms and same date)
+    if (timeDiff < 300 && lastClickedDate && 
+        lastClickedDate.getDate() === start.getDate() &&
+        lastClickedDate.getMonth() === start.getMonth() &&
+        lastClickedDate.getFullYear() === start.getFullYear()) {
+      // Double-click detected - check if there are events on this day
+      const dateStr = format(start, "yyyy-MM-dd");
+      const hasEventsOnDay = events.some(event => {
+        if (event.start instanceof Date) {
+          return format(event.start, "yyyy-MM-dd") === dateStr;
+        }
+        return false;
+      });
+      
+      if (hasEventsOnDay && onEditDayEvents) {
+        onEditDayEvents(start);
+      }
+    } else {
+      // Single click
+      onSelectDate?.(start);
+    }
+    
+    setLastClickTime(now);
+    setLastClickedDate(start);
   };
 
   const handleSelectEvent = (event: CalendarEvent) => {
     if (event.start instanceof Date) {
-      onSelectDate?.(event.start);
+      const now = Date.now();
+      const timeDiff = now - lastClickTime;
+      
+      // Check if this is a double-click
+      if (timeDiff < 300 && lastClickedDate && 
+          lastClickedDate.getDate() === event.start.getDate() &&
+          lastClickedDate.getMonth() === event.start.getMonth() &&
+          lastClickedDate.getFullYear() === event.start.getFullYear()) {
+        // Double-click on event
+        if (onEditDayEvents) {
+          onEditDayEvents(event.start);
+        }
+      } else {
+        // Single click
+        onSelectDate?.(event.start);
+      }
+      
+      setLastClickTime(now);
+      setLastClickedDate(event.start);
     }
   };
 

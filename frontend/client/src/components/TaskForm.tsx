@@ -124,7 +124,16 @@ export default function TaskForm({ onSubmit, onCancel, onClear, defaultValues, s
       </div>
 
       <div className="form-field">
-        <label>Start date</label>
+        <label htmlFor="recurrence">Recurrence *</label>
+        <select id="recurrence" {...register("recurrence")}>
+          <option value="once">Single Day</option>
+          <option value="daily">Every Day</option>
+          <option value="weekly">Weekly</option>
+        </select>
+      </div>
+
+      <div className="form-field">
+        <label>Start date *</label>
         <input type="date" {...register("start_date", { required: true })} />
       </div>
 
@@ -139,23 +148,14 @@ export default function TaskForm({ onSubmit, onCancel, onClear, defaultValues, s
 
       {recurrence !== "once" && (
         <div className="form-field">
-          <label>End date</label>
+          <label>End date *</label>
           <input type="date" {...register("end_date", { required: true })} />
         </div>
       )}
 
-      <div className="form-field">
-        <label htmlFor="recurrence">Recurrence</label>
-        <select id="recurrence" {...register("recurrence")}>
-          <option value="once">Single Day</option>
-          <option value="daily">Every Day</option>
-          <option value="weekly">Weekly</option>
-        </select>
-      </div>
-
       {recurrence === "weekly" && (
         <div className="form-field">
-          <label>Weekdays</label>
+          <label>Weekdays *</label>
           <WeekdaySelector value={weekdayValues} onChange={handleWeekdayChange} />
           {weekdayValues.length === 0 && (
             <small>Select at least one weekday.</small>

@@ -35,9 +35,21 @@ export default function App() {
   const [editingEventDate, setEditingEventDate] = useState<Date | null>(null);
   const [pendingIconFile, setPendingIconFile] = useState<File | null>(null);
   const [pendingIconDimensions, setPendingIconDimensions] = useState({ width: 150, height: 150 });
+  const [isTaskListOpen, setIsTaskListOpen] = useState(() => {
+    const saved = sessionStorage.getItem('isTaskListOpen');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+  const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(() => {
+    const saved = sessionStorage.getItem('isLeftSidebarOpen');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   
   const iconUploaderRef = useRef<IconUploaderRef>(null);
   const newTaskIconUploaderRef = useRef<IconUploaderRef>(null);
+  const googleCalendarSectionRef = useRef<HTMLDivElement>(null);
+  const sidebarRef = useRef<HTMLDivElement>(null);
 
   const createMutation = useMutation({
     mutationFn: createTask,
@@ -84,6 +96,7 @@ export default function App() {
 
     if (selectedTask) {
       updateMutation.mutate({ id: selectedTask.id, payload });
+      setSuccessMessage("Task updated successfully!");
     } else {
       // Create task and upload icon if pending
       const newTask = await createMutation.mutateAsync(payload);
@@ -102,18 +115,27 @@ export default function App() {
       }
       setPendingIconFile(null);
       setPendingIconDimensions({ width: 150, height: 150 });
+      setSuccessMessage("Task created successfully!");
+      // Clear the icon uploader
+      newTaskIconUploaderRef.current?.applyPendingChanges();
     }
     setSelectedTask(null);
+    setIsEditModalOpen(false);
+    
+    // Hide success message after 3 seconds
+    setTimeout(() => setSuccessMessage(null), 3000);
   };
 
   const handleEdit = (task: Task) => {
     setSelectedTask(task);
+    setIsEditModalOpen(true);
   };
 
   const handleCancelEdit = () => {
     setSelectedTask(null);
     setPendingIconFile(null);
     setPendingIconDimensions({ width: 150, height: 150 });
+    setIsEditModalOpen(false);
   };
 
   const handleDelete = (task: Task) => {
@@ -121,6 +143,7 @@ export default function App() {
       deleteMutation.mutate(task.id);
       if (selectedTask?.id === task.id) {
         setSelectedTask(null);
+        setIsEditModalOpen(false);
       }
     }
   };
@@ -171,6 +194,15 @@ export default function App() {
     }
   }, [tasks, selectedTask?.id]);
 
+  // Save toggle states to session storage
+  useEffect(() => {
+    sessionStorage.setItem('isTaskListOpen', JSON.stringify(isTaskListOpen));
+  }, [isTaskListOpen]);
+
+  useEffect(() => {
+    sessionStorage.setItem('isLeftSidebarOpen', JSON.stringify(isLeftSidebarOpen));
+  }, [isLeftSidebarOpen]);
+
   // Heartbeat to keep server alive
   useEffect(() => {
     // Send initial heartbeat
@@ -201,57 +233,53 @@ export default function App() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
       <Header />
+      {successMessage && (
+        <div className="success-notification">
+          <span className="success-icon">✓</span>
+          {successMessage}
+        </div>
+      )}
       <div className="app-shell">
-        <aside className="sidebar">
-          <h2 style={{ marginTop: 0 }}>{selectedTask ? 'Edit Task' : 'Create Task'}</h2>
-                    <TaskForm
+        <aside className={`sidebar ${isLeftSidebarOpen ? 'open' : 'closed'}`} ref={sidebarRef}>
+          <button 
+            className="sidebar-toggle"
+            onClick={() => setIsLeftSidebarOpen(!isLeftSidebarOpen)}
+            title={isLeftSidebarOpen ? 'Hide panel' : 'Show panel'}
+          >
+            {isLeftSidebarOpen ? '◀' : '▶'}
+          </button>
+          <h2 style={{ margin: "0 0 1rem 0", fontSize: "1.125rem" }}>Create New Task</h2>
+          <TaskForm
             onSubmit={handleSubmit}
-            onCancel={selectedTask ? () => setSelectedTask(null) : undefined}
             onClear={handleRemovePendingIcon}
-            submitting={
-              selectedTask ? updateMutation.isPending : createMutation.isPending
-            }
+            submitting={createMutation.isPending}
             defaultValues={{
-              ...(selectedTask ?? {}),
-              start_date: selectedTask?.start_date ?? defaultStartDate,
-              end_date: selectedTask?.end_date,
+              start_date: defaultStartDate,
             }}
           >
-            <div style={{ marginTop: "1rem" }}>
-              {selectedTask ? (
-                <IconUploader
-                  ref={iconUploaderRef}
-                  taskId={selectedTask.id}
-                  iconPath={selectedTask.icon_path ?? undefined}
-                  iconWidth={selectedTask.icon_width ?? undefined}
-                  iconHeight={selectedTask.icon_height ?? undefined}
-                  onUpload={(file) => handleUpload(selectedTask, file)}
-                  onResize={(dimensions) => handleResize(selectedTask, dimensions)}
-                  onRemove={() => handleRemoveIcon(selectedTask)}
-                />
-              ) : (
-                <IconUploader
-                  ref={newTaskIconUploaderRef}
-                  iconPath={pendingIconFile ? URL.createObjectURL(pendingIconFile) : undefined}
-                  iconWidth={pendingIconDimensions.width}
-                  iconHeight={pendingIconDimensions.height}
-                  onUpload={handlePendingIconUpload}
-                  onResize={handlePendingIconResize}
-                  onRemove={handleRemovePendingIcon}
-                />
-              )}
-            </div>
+            <IconUploader
+              ref={newTaskIconUploaderRef}
+                iconPath={pendingIconFile ? URL.createObjectURL(pendingIconFile) : undefined}
+                iconWidth={pendingIconDimensions.width}
+                iconHeight={pendingIconDimensions.height}
+                onUpload={handlePendingIconUpload}
+                onResize={handlePendingIconResize}
+                onRemove={handleRemovePendingIcon}
+              />
           </TaskForm>
 
-          <h3>Existing Tasks</h3>
-          {isLoading ? (
-            <p>Loading...</p>
-          ) : (
-            <TaskList tasks={tasks} onEdit={handleEdit} onDelete={handleDelete} />
-          )}
-
-          <div style={{ marginTop: "30px", paddingTop: "20px", borderTop: "1px solid #ddd" }}>
-            <GoogleCalendarSync />
+          <div ref={googleCalendarSectionRef} style={{ marginTop: "1.25rem", paddingTop: "1rem", borderTop: "1px solid #e5e7eb" }}>
+            <GoogleCalendarSync onConnectStart={() => {
+              // Scroll to make Google Calendar section visible with more space
+              setTimeout(() => {
+                const section = googleCalendarSectionRef.current;
+                const sidebar = sidebarRef.current;
+                if (section && sidebar) {
+                  const sectionTop = section.offsetTop;
+                  sidebar.scrollTo({ top: sectionTop - 20, behavior: 'smooth' });
+                }
+              }, 100);
+            }} />
           </div>
         </aside>
         <main className="main-content">
@@ -265,6 +293,26 @@ export default function App() {
             />
           </div>
         </main>
+        <aside className={`task-sidebar ${isTaskListOpen ? 'open' : 'closed'}`}>
+          <button 
+            className="task-sidebar-toggle"
+            onClick={() => setIsTaskListOpen(!isTaskListOpen)}
+            title={isTaskListOpen ? 'Hide tasks' : 'Show tasks'}
+          >
+            {isTaskListOpen ? '▶' : '◀'}
+          </button>
+          <div className="task-sidebar-content">
+            <div className="task-sidebar-header">
+              <h3>All Tasks</h3>
+              <span className="task-count-badge">{tasks.length}</span>
+            </div>
+            {isLoading ? (
+              <p style={{ textAlign: 'center', color: '#6b7280' }}>Loading...</p>
+            ) : (
+              <TaskList tasks={tasks} onEdit={handleEdit} onDelete={handleDelete} />
+            )}
+          </div>
+        </aside>
       </div>
 
       {editingEventDate && (
@@ -275,6 +323,35 @@ export default function App() {
           onUpdateTime={handleUpdateEventTime}
           onClose={() => setEditingEventDate(null)}
         />
+      )}
+
+      {isEditModalOpen && selectedTask && (
+        <div className="modal-overlay" onClick={handleCancelEdit}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ marginTop: 0 }}>Edit Task</h2>
+            <TaskForm
+              onSubmit={handleSubmit}
+              onCancel={handleCancelEdit}
+              submitting={updateMutation.isPending}
+              defaultValues={{
+                ...selectedTask,
+              }}
+            >
+              <div style={{ marginTop: "1rem" }}>
+                <IconUploader
+                  ref={iconUploaderRef}
+                  taskId={selectedTask.id}
+                  iconPath={selectedTask.icon_path ?? undefined}
+                  iconWidth={selectedTask.icon_width ?? undefined}
+                  iconHeight={selectedTask.icon_height ?? undefined}
+                  onUpload={(file) => handleUpload(selectedTask, file)}
+                  onResize={(dimensions) => handleResize(selectedTask, dimensions)}
+                  onRemove={() => handleRemoveIcon(selectedTask)}
+                />
+              </div>
+            </TaskForm>
+          </div>
+        </div>
       )}
     </div>
   );

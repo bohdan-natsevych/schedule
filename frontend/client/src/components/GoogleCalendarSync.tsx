@@ -13,7 +13,11 @@ import {
 
 type ImportStep = "auth" | "select-calendar" | "select-events" | "importing";
 
-export default function GoogleCalendarImport() {
+interface GoogleCalendarImportProps {
+  onConnectStart?: () => void;
+}
+
+export default function GoogleCalendarImport({ onConnectStart }: GoogleCalendarImportProps = {}) {
   const queryClient = useQueryClient();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -53,6 +57,11 @@ export default function GoogleCalendarImport() {
       setIsAuthenticated(status.authenticated);
       if (status.authenticated) {
         setStep("select-calendar");
+        await handleLoadCalendars();
+        // Trigger scroll after loading calendars
+        setTimeout(() => {
+          onConnectStart?.();
+        }, 200);
       }
     } catch (error) {
       console.error("Error checking auth status:", error);
@@ -63,19 +72,24 @@ export default function GoogleCalendarImport() {
 
   const handleConnect = async () => {
     try {
+      onConnectStart?.();
       const authUrl = await getGoogleAuthUrl();
-      window.open(authUrl, "_blank");
-      setMessage("Please authorize in the new window, then return here and refresh.");
+      window.location.href = authUrl;
     } catch (error: any) {
       setMessage(error.message || "Failed to get authorization URL");
     }
   };
 
   const handleDisconnect = async () => {
+    if (!confirm("Are you sure you want to disconnect from Google Calendar?")) return;
     try {
       await disconnectGoogle();
       setIsAuthenticated(false);
       setStep("auth");
+      setCalendars([]);
+      setEvents([]);
+      setSelectedCalendars([]);
+      setSelectedEvents(new Set());
       setMessage("Disconnected from Google Calendar");
     } catch (error: any) {
       setMessage(error.message || "Failed to disconnect");
@@ -158,53 +172,83 @@ export default function GoogleCalendarImport() {
     }
   };
 
+  const getStepNumber = () => {
+    if (!isAuthenticated) return 1;
+    if (step === "select-calendar") return 2;
+    if (step === "select-events") return 3;
+    if (step === "importing") return 4;
+    return 1;
+  };
+
   if (loading) {
     return (
       <div className="google-calendar-section">
-        <h3>Import from Google Calendar</h3>
-        <p>Loading...</p>
+        <div className="google-calendar-header">
+          <span className="google-calendar-icon">📅</span>
+          <h3>Google Calendar</h3>
+        </div>
+        <p className="loading-text">Loading...</p>
       </div>
     );
   }
 
   return (
     <div className="google-calendar-section">
-      <h3>Import from Google Calendar</h3>
+      <div className="google-calendar-header">
+        <span className="google-calendar-icon">📅</span>
+        <h3>Google Calendar</h3>
+      </div>
 
       {message && (
-        <div
-          className="message-box"
-          style={{
-            padding: "10px",
-            marginBottom: "15px",
-            backgroundColor: message.includes("Success") || message.includes("Successfully") ? "#d4edda" : "#f8d7da",
-            color: message.includes("Success") || message.includes("Successfully") ? "#155724" : "#721c24",
-            borderRadius: "4px",
-          }}
-        >
-          {message}
+        <div className={`message-box ${message.includes("Success") || message.includes("Successfully") ? "success" : "error"}`}>
+          <span className="message-text">{message}</span>
+          <button 
+            className="message-close-btn"
+            onClick={() => setMessage("")}
+            aria-label="Close message"
+          >
+            ×
+          </button>
         </div>
       )}
 
-      {step === "auth" && !isAuthenticated && (
-        <div>
-          <p>Connect to Google Calendar to import your events.</p>
-          <button onClick={handleConnect} className="primary-button">
+      {isAuthenticated && (
+        <div className="import-steps">
+          <div className={`step-indicator ${step === "select-calendar" || step === "auth" ? "active" : "complete"}`}>
+            <span className="step-number">{getStepNumber() > 2 ? "✓" : "1"}</span>
+            <span className="step-label">Connect</span>
+          </div>
+          <div className="step-line"></div>
+          <div className={`step-indicator ${step === "select-calendar" ? "active" : step === "select-events" || step === "importing" ? "complete" : ""}`}>
+            <span className="step-number">{getStepNumber() > 3 ? "✓" : "2"}</span>
+            <span className="step-label">Select</span>
+          </div>
+          <div className="step-line"></div>
+          <div className={`step-indicator ${step === "select-events" ? "active" : step === "importing" ? "complete" : ""}`}>
+            <span className="step-number">{getStepNumber() === 4 ? "✓" : "3"}</span>
+            <span className="step-label">Import</span>
+          </div>
+        </div>
+      )}
+
+      {!isAuthenticated && (
+        <div className="auth-section">
+          <p className="section-description">Connect to Google Calendar to import your events as tasks.</p>
+          <button onClick={handleConnect} className="primary-button google-connect-btn">
+            <span className="google-icon">🔗</span>
             Connect to Google Calendar
           </button>
         </div>
       )}
 
       {step === "select-calendar" && isAuthenticated && (
-        <div>
-          <button onClick={handleLoadCalendars} className="secondary-button" style={{ marginBottom: "15px" }}>
-            {calendars.length > 0 ? "Refresh Calendars" : "Load Calendars"}
-          </button>
-
-          {calendars.length > 0 && (
+        <div className="calendar-selection">
+          {calendars.length === 0 ? (
+            <p className="loading-text">Loading calendars...</p>
+          ) : (
             <>
-              <div style={{ marginBottom: "15px" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div className="import-option">
+                <label className="checkbox-label">
                   <input
                     type="checkbox"
                     checked={importAllCalendars}
@@ -212,16 +256,17 @@ export default function GoogleCalendarImport() {
                       setImportAllCalendars(e.target.checked);
                       if (e.target.checked) setSelectedCalendars([]);
                     }}
+                    className="custom-checkbox"
                   />
                   <span>Import from all calendars</span>
                 </label>
               </div>
 
               {!importAllCalendars && (
-                <div style={{ marginBottom: "15px", maxHeight: "200px", overflowY: "auto" }}>
-                  <p><strong>Select calendars:</strong></p>
+                <div className="calendar-list">
+                  <p className="section-subtitle">Select calendars:</p>
                   {calendars.map(cal => (
-                    <label key={cal.id} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                    <label key={cal.id} className="calendar-item">
                       <input
                         type="checkbox"
                         checked={selectedCalendars.includes(cal.id)}
@@ -232,67 +277,78 @@ export default function GoogleCalendarImport() {
                             setSelectedCalendars(selectedCalendars.filter(id => id !== cal.id));
                           }
                         }}
+                        className="custom-checkbox"
                       />
-                      <span style={{ color: cal.backgroundColor }}>{cal.name}</span>
-                      {cal.primary && <span style={{ fontSize: "12px", color: "#666" }}>(Primary)</span>}
+                      <span className="calendar-name" style={{ borderLeft: `4px solid ${cal.backgroundColor}` }}>
+                        {cal.name}
+                        {cal.primary && <span className="primary-badge">Primary</span>}
+                      </span>
                     </label>
                   ))}
                 </div>
               )}
 
-              <button
-                onClick={handleLoadEvents}
-                className="primary-button"
-                disabled={loadingEvents || (!importAllCalendars && selectedCalendars.length === 0)}
-              >
-                {loadingEvents ? "Loading Events..." : "Load Events"}
-              </button>
+              <div className="button-group">
+                <button
+                  onClick={handleLoadEvents}
+                  className="primary-button"
+                  disabled={loadingEvents || (!importAllCalendars && selectedCalendars.length === 0)}
+                >
+                  {loadingEvents ? "Loading Events..." : "Continue to Events"}
+                </button>
+                <button onClick={handleDisconnect} className="secondary-button disconnect-btn">
+                  Disconnect
+                </button>
+              </div>
             </>
           )}
-
-          <div style={{ marginTop: "20px" }}>
-            <button onClick={handleDisconnect} className="secondary-button">
-              Disconnect
-            </button>
-          </div>
         </div>
       )}
 
       {step === "select-events" && (
-        <div>
-          <p><strong>Select events to import:</strong></p>
-          <div style={{ marginBottom: "10px" }}>
-            <button onClick={handleSelectAllEvents} className="secondary-button" style={{ marginRight: "10px" }}>
-              Select All
-            </button>
-            <button onClick={handleDeselectAllEvents} className="secondary-button">
-              Deselect All
-            </button>
+        <div className="event-selection">
+          <div className="selection-header">
+            <p className="section-subtitle">Select events to import ({events.length} total)</p>
+            <div className="selection-actions">
+              <button onClick={handleSelectAllEvents} className="text-button">
+                Select All
+              </button>
+              <span className="action-separator">•</span>
+              <button onClick={handleDeselectAllEvents} className="text-button">
+                Clear
+              </button>
+            </div>
           </div>
 
-          <div style={{ maxHeight: "400px", overflowY: "auto", marginBottom: "15px", border: "1px solid #ddd", padding: "10px", borderRadius: "4px" }}>
+          <div className="event-list">
             {events.length === 0 ? (
-              <p>No events found.</p>
+              <div className="empty-state">
+                <span className="empty-icon">📭</span>
+                <p>No events found in selected calendars</p>
+              </div>
             ) : (
               events.map(event => (
-                <label key={event.id} style={{ display: "block", marginBottom: "12px", padding: "8px", backgroundColor: selectedEvents.has(event.id) ? "#e3f2fd" : "transparent", borderRadius: "4px" }}>
+                <label key={event.id} className={`event-item ${selectedEvents.has(event.id) ? "selected" : ""}`}>
                   <input
                     type="checkbox"
                     checked={selectedEvents.has(event.id)}
                     onChange={() => handleToggleEvent(event.id)}
-                    style={{ marginRight: "8px" }}
+                    className="custom-checkbox"
                   />
-                  <strong>{event.title}</strong>
-                  <div style={{ fontSize: "13px", color: "#666", marginLeft: "24px" }}>
-                    {event.start_date} {event.start_time && `at ${event.start_time.substring(0, 5)}`}
-                    {event.is_all_day && " (All day)"}
+                  <div className="event-details">
+                    <div className="event-title">{event.title}</div>
+                    <div className="event-meta">
+                      <span>📅 {event.start_date}</span>
+                      {event.start_time && <span>🕐 {event.start_time.substring(0, 5)}</span>}
+                      {event.is_all_day && <span className="all-day-badge">All day</span>}
+                    </div>
                   </div>
                 </label>
               ))
             )}
           </div>
 
-          <div style={{ display: "flex", gap: "10px" }}>
+          <div className="button-group">
             <button onClick={handleImport} className="primary-button" disabled={selectedEvents.size === 0}>
               Import {selectedEvents.size} Event{selectedEvents.size !== 1 ? "s" : ""}
             </button>
@@ -304,7 +360,8 @@ export default function GoogleCalendarImport() {
       )}
 
       {step === "importing" && (
-        <div>
+        <div className="importing-state">
+          <div className="spinner"></div>
           <p>Importing events...</p>
         </div>
       )}
