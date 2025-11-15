@@ -36,3 +36,24 @@ export async function deleteOverride(overrideId: number): Promise<void> {
   await api.delete(`/overrides/${overrideId}`);
 }
 
+export async function uploadOverrideIcon(overrideId: number, file: File): Promise<TaskDayOverride> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await api.post<TaskDayOverride>(`/overrides/${overrideId}/icon`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
+export async function updateOverrideIconSize(
+  overrideId: number,
+  iconWidth: number,
+  iconHeight: number
+): Promise<TaskDayOverride> {
+  const { data } = await api.put<TaskDayOverride>(`/overrides/${overrideId}`, {
+    icon_width: iconWidth,
+    icon_height: iconHeight,
+  });
+  return data;
+}
+

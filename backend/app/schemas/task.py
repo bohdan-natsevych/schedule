@@ -18,6 +18,7 @@ class TaskBase(BaseModel):
     icon_path: Optional[str] = None
     icon_width: Optional[int] = None
     icon_height: Optional[int] = None
+    icon_display_mode: Optional[str] = "all"
     font_size: Optional[int] = None
     is_all_day: bool = False
 
@@ -34,6 +35,7 @@ class TaskCreate(BaseModel):
     icon_path: Optional[str] = None
     icon_width: Optional[int] = None
     icon_height: Optional[int] = None
+    icon_display_mode: Optional[str] = "all"
     font_size: Optional[int] = None
     is_all_day: bool = False
 
@@ -50,6 +52,7 @@ class TaskUpdate(BaseModel):
     icon_path: Optional[str] = None
     icon_width: Optional[int] = None
     icon_height: Optional[int] = None
+    icon_display_mode: Optional[str] = None
     font_size: Optional[int] = None
     is_all_day: Optional[bool] = None
 
@@ -97,6 +100,9 @@ class TaskDayOverrideBase(BaseModel):
     date: date
     start_time: Optional[time] = None
     end_time: Optional[time] = None
+    icon_path: Optional[str] = None
+    icon_width: Optional[int] = None
+    icon_height: Optional[int] = None
 
 
 class TaskDayOverrideCreate(TaskDayOverrideBase):
@@ -106,6 +112,9 @@ class TaskDayOverrideCreate(TaskDayOverrideBase):
 class TaskDayOverrideUpdate(BaseModel):
     start_time: Optional[time] = None
     end_time: Optional[time] = None
+    icon_path: Optional[str] = None
+    icon_width: Optional[int] = None
+    icon_height: Optional[int] = None
 
 
 class TaskDayOverride(TaskDayOverrideBase):

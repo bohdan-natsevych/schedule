@@ -1,12 +1,22 @@
 from datetime import date
 from typing import List
+import os
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app import models, schemas
 from app.crud import overrides as override_crud
 from app.database import get_db
+
+# COPILOT: Use environment variable if set (for bundled app), otherwise use default
+uploads_path_str = os.environ.get('UPLOADS_PATH')
+if uploads_path_str:
+    UPLOAD_DIR = Path(uploads_path_str)
+else:
+    UPLOAD_DIR = Path(__file__).resolve().parents[2] / "uploads"
+UPLOAD_DIR.mkdir(exist_ok=True)
 
 router = APIRouter(prefix="/overrides", tags=["overrides"])
 
@@ -90,4 +100,25 @@ def delete_override(override_id: int, db: Session = Depends(get_db)) -> None:
     success = override_crud.delete_override(db, override_id)
     if not success:
         raise HTTPException(status_code=404, detail="Override not found")
+
+
+@router.post("/{override_id}/icon", response_model=schemas.TaskDayOverride)
+def upload_override_icon(
+    override_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+) -> schemas.TaskDayOverride:
+    """COPILOT: Upload icon for a specific occurrence override"""
+    db_override = override_crud.get_override(db, override_id)
+    if not db_override:
+        raise HTTPException(status_code=404, detail="Override not found")
+
+    file_path = UPLOAD_DIR / f"override_{override_id}_{file.filename}"
+    with file_path.open("wb") as buffer:
+        buffer.write(file.file.read())
+
+    db_override.icon_path = f"/uploads/{file_path.name}"
+    db.commit()
+    db.refresh(db_override)
+    return db_override
 

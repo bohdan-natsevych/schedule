@@ -41,9 +41,13 @@ def expand_task(
         task_end = task.end_date or task.start_date
         current = max(task.start_date, start)
         end_date = min(task_end, end)
+        occurrences = []
         while current <= end_date:
-            yield _create_occurrence(task, current, overrides.get(current))
+            occurrences.append((current, overrides.get(current)))
             current += timedelta(days=1)
+        
+        for idx, (occ_date, override) in enumerate(occurrences):
+            yield _create_occurrence(task, occ_date, override, idx, len(occurrences))
         return
 
     task_end = task.end_date or end
@@ -51,9 +55,13 @@ def expand_task(
     if task.recurrence == "daily":
         current = max(task.start_date, start)
         end_date = min(task_end, end)
+        occurrences = []
         while current <= end_date:
-            yield _create_occurrence(task, current, overrides.get(current))
+            occurrences.append((current, overrides.get(current)))
             current += timedelta(days=1)
+        
+        for idx, (occ_date, override) in enumerate(occurrences):
+            yield _create_occurrence(task, occ_date, override, idx, len(occurrences))
         return
 
     if task.recurrence == "weekly":
@@ -63,23 +71,57 @@ def expand_task(
         current = max(task.start_date, start)
         end_date = min(task_end, end)
         delta = timedelta(days=1)
+        occurrences = []
         while current <= end_date:
             if current.weekday() in weekdays:
-                yield _create_occurrence(task, current, overrides.get(current))
+                occurrences.append((current, overrides.get(current)))
             current += delta
+        
+        for idx, (occ_date, override) in enumerate(occurrences):
+            yield _create_occurrence(task, occ_date, override, idx, len(occurrences))
         return
 
 
 def _create_occurrence(
-    task: Task, occurrence_date: date, override: TaskDayOverride | None = None
+    task: Task,
+    occurrence_date: date,
+    override: TaskDayOverride | None = None,
+    index: int = 0,
+    total: int = 1
 ) -> TaskOccurrence:
-    """CURSOR: Create occurrence, applying override if present. Handles legacy tasks without time."""
+    """CURSOR: Create occurrence, applying override if present. Handles icon display modes and per-occurrence icons."""
     start_time = (override.start_time if override and override.start_time else task.start_time)
     end_time = (override.end_time if override and override.end_time else task.end_time)
     
     # CURSOR: Default to 09:00 for legacy tasks without time
     if start_time is None:
         start_time = time(9, 0)
+    
+    # COPILOT: Handle icon display based on mode and per-occurrence overrides
+    icon_path = None
+    icon_width = None
+    icon_height = None
+    
+    # Check if override has custom icon
+    if override and override.icon_path:
+        icon_path = override.icon_path
+        icon_width = override.icon_width
+        icon_height = override.icon_height
+    else:
+        # Use task's icon based on display mode
+        display_mode = task.icon_display_mode or "all"
+        if display_mode == "all":
+            icon_path = task.icon_path
+            icon_width = task.icon_width
+            icon_height = task.icon_height
+        elif display_mode == "first" and index == 0:
+            icon_path = task.icon_path
+            icon_width = task.icon_width
+            icon_height = task.icon_height
+        elif display_mode == "last" and index == total - 1:
+            icon_path = task.icon_path
+            icon_width = task.icon_width
+            icon_height = task.icon_height
     
     return TaskOccurrence(
         task_id=task.id,
@@ -88,9 +130,9 @@ def _create_occurrence(
         date=occurrence_date,
         start_time=start_time,
         end_time=end_time,
-        icon_path=task.icon_path,
-        icon_width=task.icon_width,
-        icon_height=task.icon_height,
+        icon_path=icon_path,
+        icon_width=icon_width,
+        icon_height=icon_height,
         font_size=task.font_size,
         is_all_day=task.is_all_day,
     )

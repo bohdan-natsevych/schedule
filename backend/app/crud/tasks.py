@@ -48,6 +48,12 @@ def delete_task(db: Session, task_id: int) -> bool:
     db_task = get_task(db, task_id)
     if not db_task:
         return False
-    db.delete(db_task)
-    db.commit()
-    return True
+    
+    try:
+        db.delete(db_task)
+        db.commit()
+        return True
+    except Exception as e:
+        db.rollback()
+        print(f"Error deleting task {task_id}: {str(e)}")
+        raise

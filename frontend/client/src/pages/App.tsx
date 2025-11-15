@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import Header from "../components/Header";
 import TaskForm from "../components/TaskForm";
 import TaskList from "../components/TaskList";
 import CalendarView from "../components/CalendarView";
-import IconUploader from "../components/IconUploader";
+import IconUploader, { IconUploaderRef } from "../components/IconUploader";
 import EventTimeEditor from "../components/EventTimeEditor";
+import GoogleCalendarSync from "../components/GoogleCalendarSync";
 import {
   createTask,
   deleteTask,
@@ -32,6 +33,11 @@ export default function App() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [editingEventDate, setEditingEventDate] = useState<Date | null>(null);
+  const [pendingIconFile, setPendingIconFile] = useState<File | null>(null);
+  const [pendingIconDimensions, setPendingIconDimensions] = useState({ width: 150, height: 150 });
+  
+  const iconUploaderRef = useRef<IconUploaderRef>(null);
+  const newTaskIconUploaderRef = useRef<IconUploaderRef>(null);
 
   const createMutation = useMutation({
     mutationFn: createTask,
@@ -47,6 +53,10 @@ export default function App() {
   const deleteMutation = useMutation({
     mutationFn: deleteTask,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+    onError: (error: any) => {
+      const errorMessage = error.response?.data?.detail || error.message || "Failed to delete task";
+      alert(`Error deleting task: ${errorMessage}`);
+    },
   });
 
   const iconMutation = useMutation({
@@ -55,7 +65,14 @@ export default function App() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tasks"] }),
   });
 
-  const handleSubmit = (data: TaskCreate) => {
+  const handleSubmit = async (data: TaskCreate) => {
+    // Apply any pending custom size changes before saving
+    if (selectedTask) {
+      iconUploaderRef.current?.applyPendingChanges();
+    } else {
+      newTaskIconUploaderRef.current?.applyPendingChanges();
+    }
+    
     const payload: TaskCreate = {
       ...data,
       end_time: null,
@@ -68,7 +85,23 @@ export default function App() {
     if (selectedTask) {
       updateMutation.mutate({ id: selectedTask.id, payload });
     } else {
-      createMutation.mutate(payload);
+      // Create task and upload icon if pending
+      const newTask = await createMutation.mutateAsync(payload);
+      if (pendingIconFile && newTask) {
+        await iconMutation.mutateAsync({ id: newTask.id, file: pendingIconFile });
+        // Update dimensions if not default
+        if (pendingIconDimensions.width !== 150 || pendingIconDimensions.height !== 150) {
+          await updateMutation.mutateAsync({
+            id: newTask.id,
+            payload: {
+              icon_width: pendingIconDimensions.width,
+              icon_height: pendingIconDimensions.height,
+            },
+          });
+        }
+      }
+      setPendingIconFile(null);
+      setPendingIconDimensions({ width: 150, height: 150 });
     }
     setSelectedTask(null);
   };
@@ -79,6 +112,8 @@ export default function App() {
 
   const handleCancelEdit = () => {
     setSelectedTask(null);
+    setPendingIconFile(null);
+    setPendingIconDimensions({ width: 150, height: 150 });
   };
 
   const handleDelete = (task: Task) => {
@@ -94,11 +129,33 @@ export default function App() {
     await iconMutation.mutateAsync({ id: task.id, file });
   };
 
+  const handlePendingIconUpload = (file: File) => {
+    setPendingIconFile(file);
+  };
+
+  const handlePendingIconResize = (dimensions: { icon_width: number; icon_height: number }) => {
+    setPendingIconDimensions({ width: dimensions.icon_width, height: dimensions.icon_height });
+  };
+
+  const handleRemovePendingIcon = () => {
+    setPendingIconFile(null);
+    setPendingIconDimensions({ width: 150, height: 150 });
+  };
+
   const handleResize = (task: Task, dimensions: { icon_width: number; icon_height: number }) => {
     updateMutation.mutate({
       id: task.id,
       payload: dimensions,
     });
+  };
+
+  const handleRemoveIcon = (task: Task) => {
+    if (confirm('Remove icon from this task?')) {
+      updateMutation.mutate({
+        id: task.id,
+        payload: { icon_path: null, icon_width: null, icon_height: null },
+      });
+    }
   };
 
   const handleUpdateEventTime = async (taskId: number, date: string, startTime: string | null) => {
@@ -132,8 +189,11 @@ export default function App() {
   }, []);
 
   const defaultStartDate = useMemo(() => {
-    if (!selectedDate) return new Date().toISOString().slice(0, 10);
-    return selectedDate.toISOString().slice(0, 10);
+    const dateToUse = selectedDate || new Date();
+    const year = dateToUse.getFullYear();
+    const month = String(dateToUse.getMonth() + 1).padStart(2, '0');
+    const day = String(dateToUse.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }, [selectedDate]);
 
   const hasRecurrence = selectedTask?.recurrence !== "once";
@@ -144,16 +204,44 @@ export default function App() {
       <div className="app-shell">
         <aside className="sidebar">
           <h2 style={{ marginTop: 0 }}>{selectedTask ? 'Edit Task' : 'Create Task'}</h2>
-          <TaskForm
+                    <TaskForm
             onSubmit={handleSubmit}
-            onCancel={selectedTask ? handleCancelEdit : undefined}
-            submitting={createMutation.isPending || updateMutation.isPending}
+            onCancel={selectedTask ? () => setSelectedTask(null) : undefined}
+            onClear={handleRemovePendingIcon}
+            submitting={
+              selectedTask ? updateMutation.isPending : createMutation.isPending
+            }
             defaultValues={{
               ...(selectedTask ?? {}),
               start_date: selectedTask?.start_date ?? defaultStartDate,
               end_date: selectedTask?.end_date,
             }}
-          />
+          >
+            <div style={{ marginTop: "1rem" }}>
+              {selectedTask ? (
+                <IconUploader
+                  ref={iconUploaderRef}
+                  taskId={selectedTask.id}
+                  iconPath={selectedTask.icon_path ?? undefined}
+                  iconWidth={selectedTask.icon_width ?? undefined}
+                  iconHeight={selectedTask.icon_height ?? undefined}
+                  onUpload={(file) => handleUpload(selectedTask, file)}
+                  onResize={(dimensions) => handleResize(selectedTask, dimensions)}
+                  onRemove={() => handleRemoveIcon(selectedTask)}
+                />
+              ) : (
+                <IconUploader
+                  ref={newTaskIconUploaderRef}
+                  iconPath={pendingIconFile ? URL.createObjectURL(pendingIconFile) : undefined}
+                  iconWidth={pendingIconDimensions.width}
+                  iconHeight={pendingIconDimensions.height}
+                  onUpload={handlePendingIconUpload}
+                  onResize={handlePendingIconResize}
+                  onRemove={handleRemovePendingIcon}
+                />
+              )}
+            </div>
+          </TaskForm>
 
           <h3>Existing Tasks</h3>
           {isLoading ? (
@@ -162,19 +250,9 @@ export default function App() {
             <TaskList tasks={tasks} onEdit={handleEdit} onDelete={handleDelete} />
           )}
 
-          {selectedTask && (
-            <div style={{ marginTop: "1rem" }}>
-              <h3>Icon</h3>
-              <IconUploader
-                taskId={selectedTask.id}
-                iconPath={selectedTask.icon_path ?? undefined}
-                iconWidth={selectedTask.icon_width ?? undefined}
-                iconHeight={selectedTask.icon_height ?? undefined}
-                onUpload={(file) => handleUpload(selectedTask, file)}
-                onResize={(dimensions) => handleResize(selectedTask, dimensions)}
-              />
-            </div>
-          )}
+          <div style={{ marginTop: "30px", paddingTop: "20px", borderTop: "1px solid #ddd" }}>
+            <GoogleCalendarSync />
+          </div>
         </aside>
         <main className="main-content">
           <div className="calendar-container">

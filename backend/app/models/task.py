@@ -20,8 +20,16 @@ class Task(Base):
     icon_path = Column(String, nullable=True)
     icon_width = Column(Integer, nullable=True)
     icon_height = Column(Integer, nullable=True)
+    icon_display_mode = Column(String, nullable=True, default="all")  # all, first, last
     font_size = Column(Integer, nullable=True)
     is_all_day = Column(Boolean, default=False)
+    
+    day_overrides = relationship(
+        "TaskDayOverride",
+        back_populates="task",
+        cascade="all, delete-orphan",
+        passive_deletes=True
+    )
 
 
 class TaskIcon(Base):
@@ -41,5 +49,8 @@ class TaskDayOverride(Base):
     date = Column(Date, nullable=False)
     start_time = Column(Time, nullable=True)
     end_time = Column(Time, nullable=True)
+    icon_path = Column(String, nullable=True)
+    icon_width = Column(Integer, nullable=True)
+    icon_height = Column(Integer, nullable=True)
 
-    task = relationship("Task", backref="day_overrides")
+    task = relationship("Task", back_populates="day_overrides")

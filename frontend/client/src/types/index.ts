@@ -13,6 +13,7 @@ export interface Task {
   icon_path?: string | null;
   icon_width?: number | null;
   icon_height?: number | null;
+  icon_display_mode?: string | null;
   font_size?: number | null;
   is_all_day: boolean;
 }
@@ -29,6 +30,7 @@ export interface TaskCreateData {
   icon_path?: string | null;
   icon_width?: number | null;
   icon_height?: number | null;
+  icon_display_mode?: string | null;
   font_size?: number | null;
   is_all_day: boolean;
 }
@@ -67,6 +69,9 @@ export interface TaskDayOverride {
   date: string;
   start_time?: string | null;
   end_time?: string | null;
+  icon_path?: string | null;
+  icon_width?: number | null;
+  icon_height?: number | null;
 }
 
 export type TaskDayOverrideCreate = Omit<TaskDayOverride, "id">;

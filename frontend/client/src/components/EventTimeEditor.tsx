@@ -14,6 +14,7 @@ interface EventWithTime {
   task: Task;
   startTime: string;
   occurrence: TaskOccurrence | null;
+  override?: TaskDayOverride;
 }
 
 export default function EventTimeEditor({
@@ -69,6 +70,7 @@ export default function EventTimeEditor({
           task,
           startTime,
           occurrence: null,
+          override,
         });
       }
     }
@@ -167,6 +169,11 @@ export default function EventTimeEditor({
                   {event.task.recurrence !== "once" && (
                     <span className="event-recurrence-badge">
                       {event.task.recurrence}
+                    </span>
+                  )}
+                  {event.override?.icon_path && (
+                    <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem' }}>
+                      🖼️ Has custom icon
                     </span>
                   )}
                 </div>

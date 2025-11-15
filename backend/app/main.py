@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.database import Base, engine
-from app.routers import tasks, overrides
+from app.routers import tasks, overrides, google_calendar
 
 Base.metadata.create_all(bind=engine)
 
@@ -40,6 +40,7 @@ app.mount("/uploads", StaticFiles(directory=str(uploads_path)), name="uploads")
 
 app.include_router(tasks.router)
 app.include_router(overrides.router)
+app.include_router(google_calendar.router)
 
 
 # Heartbeat endpoint

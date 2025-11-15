@@ -8,11 +8,13 @@ import { Task, Recurrence, TaskCreate } from "../types";
 interface TaskFormProps {
   onSubmit: (data: TaskCreate) => void;
   onCancel?: () => void;
+  onClear?: () => void;
   defaultValues?: Partial<Task>;
   submitting?: boolean;
+  children?: React.ReactNode;
 }
 
-export default function TaskForm({ onSubmit, onCancel, defaultValues, submitting }: TaskFormProps) {
+export default function TaskForm({ onSubmit, onCancel, onClear, defaultValues, submitting, children }: TaskFormProps) {
   const today = format(new Date(), "yyyy-MM-dd");
 
   const parseDate = (value?: string | null) => {
@@ -81,7 +83,12 @@ export default function TaskForm({ onSubmit, onCancel, defaultValues, submitting
     if (!start) return;
 
     if (recurrence === "once") {
-      setValue("end_date", format(start, "yyyy-MM-dd"), { shouldDirty: true });
+      // Only auto-set end_date if it's not already set (new task)
+      // or if end_date is before start_date (invalid)
+      const end = parseDate(endDate);
+      if (!end || end < start) {
+        setValue("end_date", format(start, "yyyy-MM-dd"), { shouldDirty: true });
+      }
       return;
     }
 
@@ -156,6 +163,19 @@ export default function TaskForm({ onSubmit, onCancel, defaultValues, submitting
         </div>
       )}
 
+      {recurrence !== "once" && (
+        <div className="form-field">
+          <label htmlFor="icon_display_mode">Show icon</label>
+          <select id="icon_display_mode" {...register("icon_display_mode")}>
+            <option value="all">On every occurrence</option>
+            <option value="first">On first occurrence only</option>
+            <option value="last">On last occurrence only</option>
+          </select>
+        </div>
+      )}
+
+      {children}
+
       <input type="hidden" {...register("weekday_mask")} />
 
       <div className="button-group">
@@ -167,7 +187,7 @@ export default function TaskForm({ onSubmit, onCancel, defaultValues, submitting
             Cancel Edit
           </button>
         ) : (
-          <button type="button" className="secondary-button" onClick={() => reset()}>
+          <button type="button" className="secondary-button" onClick={() => { reset(); onClear?.(); }}>
             Clear
           </button>
         )}

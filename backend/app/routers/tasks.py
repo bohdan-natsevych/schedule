@@ -53,9 +53,15 @@ def update_task(
 
 @router.delete("/{task_id}")
 def delete_task(task_id: int, db: Session = Depends(get_db)) -> None:
-    success = crud.delete_task(db, task_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Task not found")
+    try:
+        success = crud.delete_task(db, task_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Task not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error deleting task {task_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete task: {str(e)}")
 
 
 @router.post("/{task_id}/icon", response_model=schemas.Task)

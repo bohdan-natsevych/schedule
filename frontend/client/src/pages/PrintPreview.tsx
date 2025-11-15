@@ -6,7 +6,12 @@ import { preparePrint } from "../api/tasks";
 import { sendHeartbeat } from "../api/client";
 import { PrintRequest, TaskOccurrence } from "../types";
 
-const formatDate = (date: Date) => date.toISOString().slice(0, 10);
+const formatDate = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 const today = new Date();
 const defaultFrom = formatDate(today);
@@ -264,19 +269,22 @@ export default function PrintPreview() {
         >
           {customLines.map((item, index) => (
             <div key={`${item.task_id}-${index}`} className="print-line">
-              <span className="print-line-text">{item.title}</span>
-              {item.icon_path && (
-                <img
-                  src={item.icon_path}
-                  alt="Task icon"
-                  data-width={item.icon_width ?? 150}
-                  data-height={item.icon_height ?? 150}
-                  style={{
-                    width: item.icon_width ?? 150,
-                    height: item.icon_height ?? 150,
-                  }}
-                />
-              )}
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span className="print-line-text">{item.title}</span>
+                {item.icon_path && (
+                  <img
+                    src={item.icon_path}
+                    alt="Task icon"
+                    data-width={item.icon_width ?? 150}
+                    data-height={item.icon_height ?? 150}
+                    style={{
+                      width: item.icon_width ?? 150,
+                      height: item.icon_height ?? 150,
+                      marginLeft: '100px',
+                    }}
+                  />
+                )}
+              </div>
             </div>
           ))}
         </div>

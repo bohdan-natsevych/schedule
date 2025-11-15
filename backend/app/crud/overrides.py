@@ -68,7 +68,8 @@ def update_override(
 
 
 def upsert_override(
-    db: Session, task_id: int, override_date: date, start_time, end_time
+    db: Session, task_id: int, override_date: date, start_time, end_time,
+    icon_path: str | None = None, icon_width: int | None = None, icon_height: int | None = None
 ) -> models.TaskDayOverride:
     """CURSOR: Create or update an override for a specific task and date"""
     existing = get_override_by_task_and_date(db, task_id, override_date)
@@ -76,6 +77,12 @@ def upsert_override(
     if existing:
         existing.start_time = start_time
         existing.end_time = end_time
+        if icon_path is not None:
+            existing.icon_path = icon_path
+        if icon_width is not None:
+            existing.icon_width = icon_width
+        if icon_height is not None:
+            existing.icon_height = icon_height
         db.commit()
         db.refresh(existing)
         return existing
@@ -84,7 +91,10 @@ def upsert_override(
             task_id=task_id,
             date=override_date,
             start_time=start_time,
-            end_time=end_time
+            end_time=end_time,
+            icon_path=icon_path,
+            icon_width=icon_width,
+            icon_height=icon_height
         )
         db.add(new_override)
         db.commit()
