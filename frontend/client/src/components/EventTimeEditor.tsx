@@ -8,6 +8,8 @@ interface EventTimeEditorProps {
   overrides: TaskDayOverride[];
   onUpdateTime: (taskId: number, date: string, startTime: string | null) => Promise<void>;
   onClose: () => void;
+  onEditTask: (task: Task) => void;
+  onDeleteTask: (task: Task) => void;
 }
 
 interface EventWithTime {
@@ -23,6 +25,8 @@ export default function EventTimeEditor({
   overrides,
   onUpdateTime,
   onClose,
+  onEditTask,
+  onDeleteTask,
 }: EventTimeEditorProps) {
   const [events, setEvents] = useState<EventWithTime[]>([]);
   const dateStr = format(date, "yyyy-MM-dd");
@@ -80,15 +84,6 @@ export default function EventTimeEditor({
     setEvents(eventsForDay);
   }, [date, tasks, overrides, dateStr]);
 
-  const handleTimeChange = (index: number, newTime: string) => {
-    setEvents((prev) => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], startTime: newTime };
-      // Re-sort by time
-      return updated.sort((a, b) => a.startTime.localeCompare(b.startTime));
-    });
-  };
-
   const handleSave = async () => {
     // Save all time changes
     for (const event of events) {
@@ -102,12 +97,42 @@ export default function EventTimeEditor({
     
     setEvents((prev) => {
       const updated = [...prev];
-      // Swap times with previous event
-      const temp = updated[index - 1].startTime;
-      updated[index - 1] = { ...updated[index - 1], startTime: updated[index].startTime };
-      updated[index] = { ...updated[index], startTime: temp };
-      // Re-sort by time
-      return updated.sort((a, b) => a.startTime.localeCompare(b.startTime));
+      const currentEvent = updated[index];
+      const previousEvent = updated[index - 1];
+      
+      // Simply swap the positions in the array
+      updated[index] = previousEvent;
+      updated[index - 1] = currentEvent;
+      
+      // Then reassign times based on the new order to maintain proper sequencing
+      // If they had the same time, give them distinct times
+      const baseTime = previousEvent.startTime;
+      const [hours, minutes] = baseTime.split(':').map(Number);
+      
+      for (let i = Math.max(0, index - 1); i <= Math.min(index, updated.length - 1); i++) {
+        const offsetMinutes = minutes + (i - index + 1);
+        let newHours = hours;
+        let newMinutes = offsetMinutes;
+        
+        while (newMinutes < 0) {
+          newMinutes += 60;
+          newHours -= 1;
+        }
+        while (newMinutes >= 60) {
+          newMinutes -= 60;
+          newHours += 1;
+        }
+        
+        if (newHours < 0) newHours = 0;
+        if (newHours >= 24) newHours = 23;
+        
+        updated[i] = { 
+          ...updated[i], 
+          startTime: `${String(newHours).padStart(2, '0')}:${String(newMinutes).padStart(2, '0')}:00`
+        };
+      }
+      
+      return updated;
     });
   };
 
@@ -116,32 +141,66 @@ export default function EventTimeEditor({
     
     setEvents((prev) => {
       const updated = [...prev];
-      // Swap times with next event
-      const temp = updated[index + 1].startTime;
-      updated[index + 1] = { ...updated[index + 1], startTime: updated[index].startTime };
-      updated[index] = { ...updated[index], startTime: temp };
-      // Re-sort by time
-      return updated.sort((a, b) => a.startTime.localeCompare(b.startTime));
+      const currentEvent = updated[index];
+      const nextEvent = updated[index + 1];
+      
+      // Simply swap the positions in the array
+      updated[index] = nextEvent;
+      updated[index + 1] = currentEvent;
+      
+      // Then reassign times based on the new order to maintain proper sequencing
+      const baseTime = nextEvent.startTime;
+      const [hours, minutes] = baseTime.split(':').map(Number);
+      
+      for (let i = index; i <= Math.min(index + 1, updated.length - 1); i++) {
+        const offsetMinutes = minutes + (i - index);
+        let newHours = hours;
+        let newMinutes = offsetMinutes;
+        
+        while (newMinutes >= 60) {
+          newMinutes -= 60;
+          newHours += 1;
+        }
+        
+        if (newHours >= 24) newHours = 23;
+        
+        updated[i] = { 
+          ...updated[i], 
+          startTime: `${String(newHours).padStart(2, '0')}:${String(newMinutes).padStart(2, '0')}:00`
+        };
+      }
+      
+      return updated;
     });
   };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <h2>Edit Event Order - {format(date, "MMMM d, yyyy")}</h2>
+      <div className="modal-content event-order-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="event-order-header">
+          <h2>📅 Event Order</h2>
+          <p className="event-order-date">{format(date, "MMMM d, yyyy")}</p>
+        </div>
         
         {events.length === 0 ? (
-          <p>No events on this day.</p>
+          <div className="empty-state">
+            <div className="empty-state-icon">📭</div>
+            <p className="empty-state-text">No events on this day</p>
+          </div>
         ) : (
-          <div className="event-time-list">
+          <div className="event-order-list">
             {events.map((event, index) => (
-              <div key={`${event.task.id}-${index}`} className="event-time-item">
-                <div className="event-time-controls">
+              <div key={`${event.task.id}-${index}`} className="event-order-item">
+                <div className="event-order-number">
+                  {index + 1}
+                </div>
+                
+                <div className="event-order-controls">
                   <button
                     type="button"
                     onClick={() => handleMoveUp(index)}
                     disabled={index === 0}
-                    className="icon-button"
+                    className="order-arrow-button"
                     title="Move up"
                   >
                     ▲
@@ -150,41 +209,55 @@ export default function EventTimeEditor({
                     type="button"
                     onClick={() => handleMoveDown(index)}
                     disabled={index === events.length - 1}
-                    className="icon-button"
+                    className="order-arrow-button"
                     title="Move down"
                   >
                     ▼
                   </button>
                 </div>
                 
-                <input
-                  type="time"
-                  value={event.startTime}
-                  onChange={(e) => handleTimeChange(index, e.target.value)}
-                  className="time-input"
-                />
+                <div className="event-order-info">
+                  <div className="event-order-title">
+                    {event.task.title}
+                  </div>
+                  <div className="event-order-meta">
+                    <span className="event-time-badge">🕐 {event.startTime}</span>
+                    {event.task.recurrence !== "once" && (
+                      <span className="event-recurrence-badge">
+                        {event.task.recurrence}
+                      </span>
+                    )}
+                  </div>
+                </div>
                 
-                <div className="event-title">
-                  {event.task.title}
-                  {event.task.recurrence !== "once" && (
-                    <span className="event-recurrence-badge">
-                      {event.task.recurrence}
-                    </span>
-                  )}
-                  {event.override?.icon_path && (
-                    <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem' }}>
-                      🖼️ Has custom icon
-                    </span>
-                  )}
+                <div className="event-order-actions">
+                  <button
+                    type="button"
+                    onClick={() => onEditTask(event.task)}
+                    className="event-action-btn edit-btn"
+                    title="Edit task"
+                  >
+                    <span className="btn-icon">✏️</span>
+                    <span className="btn-label">Edit</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDeleteTask(event.task)}
+                    className="event-action-btn delete-btn"
+                    title="Delete task"
+                  >
+                    <span className="btn-icon">🗑️</span>
+                    <span className="btn-label">Delete</span>
+                  </button>
                 </div>
               </div>
             ))}
           </div>
         )}
         
-        <div className="button-group" style={{ marginTop: "1rem" }}>
+        <div className="event-order-footer">
           <button type="button" className="primary-button" onClick={handleSave}>
-            Save Order
+            💾 Save Order
           </button>
           <button type="button" className="secondary-button" onClick={onClose}>
             Cancel

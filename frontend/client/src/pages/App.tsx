@@ -322,6 +322,8 @@ export default function App() {
           overrides={overrides}
           onUpdateTime={handleUpdateEventTime}
           onClose={() => setEditingEventDate(null)}
+          onEditTask={handleEdit}
+          onDeleteTask={handleDelete}
         />
       )}
 

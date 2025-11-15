@@ -40,6 +40,7 @@ export default function CalendarView({
   const [view, setView] = useState<View>("month");
   const [lastClickTime, setLastClickTime] = useState<number>(0);
   const [lastClickedDate, setLastClickedDate] = useState<Date | null>(null);
+  const [lastClickWasOnEvent, setLastClickWasOnEvent] = useState(false);
 
   const events = useMemo<CalendarEvent[]>(() => {
     // CURSOR: Build a map of overrides by task_id and date for quick lookup
@@ -167,6 +168,7 @@ export default function CalendarView({
     
     setLastClickTime(now);
     setLastClickedDate(start);
+    setLastClickWasOnEvent(false);
   };
 
   const handleSelectEvent = (event: CalendarEvent) => {
@@ -178,18 +180,20 @@ export default function CalendarView({
       if (timeDiff < 300 && lastClickedDate && 
           lastClickedDate.getDate() === event.start.getDate() &&
           lastClickedDate.getMonth() === event.start.getMonth() &&
-          lastClickedDate.getFullYear() === event.start.getFullYear()) {
-        // Double-click on event
+          lastClickedDate.getFullYear() === event.start.getFullYear() &&
+          lastClickWasOnEvent) {
+        // Double-click on event - open event order modal
         if (onEditDayEvents) {
           onEditDayEvents(event.start);
         }
       } else {
-        // Single click
+        // Single click on event - just select the date
         onSelectDate?.(event.start);
       }
       
       setLastClickTime(now);
       setLastClickedDate(event.start);
+      setLastClickWasOnEvent(true);
     }
   };
 
