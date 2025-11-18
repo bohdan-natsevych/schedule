@@ -1,9 +1,10 @@
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { addYears, format, parseISO, isValid } from "date-fns";
 
 import WeekdaySelector from "./WeekdaySelector";
-import { Task, Recurrence, TaskCreate } from "../types";
+import TimePicker from "./TimePicker";
+import { Task, TaskCreate } from "../types";
 
 interface TaskFormProps {
   onSubmit: (data: TaskCreate) => void;
@@ -41,6 +42,7 @@ export default function TaskForm({ onSubmit, onCancel, onClear, defaultValues, s
 
   const {
     register,
+    control,
     handleSubmit,
     reset,
     watch,
@@ -137,21 +139,31 @@ export default function TaskForm({ onSubmit, onCancel, onClear, defaultValues, s
         <input type="date" {...register("start_date", { required: true })} />
       </div>
 
-      <div className="form-field">
-        <label>Time *</label>
-        <input 
-          type="time" 
-          {...register("start_time", { required: true })} 
-        />
-        {errors.start_time && <small>Time is required.</small>}
-      </div>
-
       {recurrence !== "once" && (
         <div className="form-field">
           <label>End date *</label>
           <input type="date" {...register("end_date", { required: true })} />
         </div>
       )}
+
+      <div className="form-field">
+        <label>Time *</label>
+        <Controller
+          name="start_time"
+          control={control}
+          rules={{ required: true }}
+          render={({ field }) => (
+            <TimePicker
+              value={field.value}
+              onChange={field.onChange}
+              onBlur={field.onBlur}
+              disabled={submitting}
+              error={Boolean(errors.start_time)}
+            />
+          )}
+        />
+        {errors.start_time && <small>Time is required.</small>}
+      </div>
 
       {recurrence === "weekly" && (
         <div className="form-field">

@@ -103,6 +103,7 @@ class TaskDayOverrideBase(BaseModel):
     icon_path: Optional[str] = None
     icon_width: Optional[int] = None
     icon_height: Optional[int] = None
+    is_hidden: bool = False  # COPILOT: Hide specific occurrence of recurring task
 
 
 class TaskDayOverrideCreate(TaskDayOverrideBase):
@@ -115,6 +116,7 @@ class TaskDayOverrideUpdate(BaseModel):
     icon_path: Optional[str] = None
     icon_width: Optional[int] = None
     icon_height: Optional[int] = None
+    is_hidden: Optional[bool] = None  # COPILOT: Allow toggling hidden status
 
 
 class TaskDayOverride(TaskDayOverrideBase):

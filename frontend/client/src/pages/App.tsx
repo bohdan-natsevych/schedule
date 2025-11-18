@@ -16,9 +16,7 @@ import {
   uploadTaskIcon,
 } from "../api/tasks";
 import { fetchAllOverrides, upsertOverride } from "../api/overrides";
-import { sendHeartbeat } from "../api/client";
 import { Task, TaskCreate, TaskUpdate } from "../types";
-import { differenceInCalendarDays, parseISO } from "date-fns";
 
 export default function App() {
   const queryClient = useQueryClient();
@@ -35,6 +33,26 @@ export default function App() {
   const [editingEventDate, setEditingEventDate] = useState<Date | null>(null);
   const [pendingIconFile, setPendingIconFile] = useState<File | null>(null);
   const [pendingIconDimensions, setPendingIconDimensions] = useState({ width: 150, height: 150 });
+  const [newTaskFormResetKey, setNewTaskFormResetKey] = useState(0);
+  type EditIconDraft = {
+    file: File | null;
+    remove: boolean;
+    width: number | null;
+    height: number | null;
+    hasFileChange: boolean;
+    hasSizeChange: boolean;
+  };
+  const [editIconDraft, setEditIconDraftState] = useState<EditIconDraft | null>(null);
+  const editIconDraftRef = useRef<EditIconDraft | null>(null);
+  const setEditIconDraft = (
+    value: EditIconDraft | null | ((prev: EditIconDraft | null) => EditIconDraft | null)
+  ) => {
+    setEditIconDraftState((prev) => {
+      const next = typeof value === "function" ? (value as (prev: EditIconDraft | null) => EditIconDraft | null)(prev) : value;
+      editIconDraftRef.current = next;
+      return next;
+    });
+  };
   const [isTaskListOpen, setIsTaskListOpen] = useState(() => {
     const saved = sessionStorage.getItem('isTaskListOpen');
     return saved !== null ? JSON.parse(saved) : true;
@@ -95,7 +113,32 @@ export default function App() {
     };
 
     if (selectedTask) {
-      updateMutation.mutate({ id: selectedTask.id, payload });
+      const draft = editIconDraftRef.current;
+
+      await updateMutation.mutateAsync({ id: selectedTask.id, payload });
+
+      if (draft?.remove && selectedTask.icon_path) {
+        await updateMutation.mutateAsync({
+          id: selectedTask.id,
+          payload: { icon_path: null, icon_width: null, icon_height: null },
+        });
+      }
+
+      if (!draft?.remove && draft?.hasFileChange && draft.file) {
+        await iconMutation.mutateAsync({ id: selectedTask.id, file: draft.file });
+      }
+
+      if (!draft?.remove && draft?.hasSizeChange) {
+        await updateMutation.mutateAsync({
+          id: selectedTask.id,
+          payload: {
+            icon_width: draft.width,
+            icon_height: draft.height,
+          },
+        });
+      }
+
+      setEditIconDraft(null);
       setSuccessMessage("Task updated successfully!");
     } else {
       // Create task and upload icon if pending
@@ -115,6 +158,7 @@ export default function App() {
       }
       setPendingIconFile(null);
       setPendingIconDimensions({ width: 150, height: 150 });
+      setNewTaskFormResetKey((key) => key + 1);
       setSuccessMessage("Task created successfully!");
       // Clear the icon uploader
       newTaskIconUploaderRef.current?.applyPendingChanges();
@@ -135,21 +179,39 @@ export default function App() {
     setSelectedTask(null);
     setPendingIconFile(null);
     setPendingIconDimensions({ width: 150, height: 150 });
+    setEditIconDraft(null);
     setIsEditModalOpen(false);
   };
 
   const handleDelete = (task: Task) => {
     if (confirm(`Delete task "${task.title}"?`)) {
       deleteMutation.mutate(task.id);
+      // If deleting the currently selected task, clear selection but keep modal open
       if (selectedTask?.id === task.id) {
         setSelectedTask(null);
-        setIsEditModalOpen(false);
       }
     }
   };
 
-  const handleUpload = async (task: Task, file: File) => {
-    await iconMutation.mutateAsync({ id: task.id, file });
+  const handleDeleteOccurrence = async (taskId: number, date: string) => {
+    // CURSOR: Hide specific occurrence of recurring task and wait for data to refresh
+    const { hideOccurrence } = await import("../api/overrides");
+    await hideOccurrence(taskId, date);
+    await queryClient.invalidateQueries({ queryKey: ["overrides"] });
+  };
+
+  const handleEditIconUpload = (file: File) => {
+    if (!selectedTask) {
+      return;
+    }
+    setEditIconDraft((prev) => ({
+      file,
+      remove: false,
+      width: prev?.width ?? selectedTask?.icon_width ?? null,
+      height: prev?.height ?? selectedTask?.icon_height ?? null,
+      hasFileChange: true,
+      hasSizeChange: prev?.hasSizeChange ?? false,
+    }));
   };
 
   const handlePendingIconUpload = (file: File) => {
@@ -166,19 +228,44 @@ export default function App() {
   };
 
   const handleResize = (task: Task, dimensions: { icon_width: number; icon_height: number }) => {
-    updateMutation.mutate({
-      id: task.id,
-      payload: dimensions,
+    if (task.id !== selectedTask?.id) {
+      updateMutation.mutate({
+        id: task.id,
+        payload: dimensions,
+      });
+      return;
+    }
+
+    if (!selectedTask) {
+      return;
+    }
+
+    const originalWidth = selectedTask.icon_width ?? null;
+    const originalHeight = selectedTask.icon_height ?? null;
+    setEditIconDraft((prev) => {
+      const width = dimensions.icon_width ?? null;
+      const height = dimensions.icon_height ?? null;
+      const hasSizeChange = width !== originalWidth || height !== originalHeight;
+      return {
+        file: prev?.file ?? null,
+        remove: prev?.remove ?? false,
+        width,
+        height,
+        hasFileChange: prev?.hasFileChange ?? false,
+        hasSizeChange,
+      };
     });
   };
 
-  const handleRemoveIcon = (task: Task) => {
-    if (confirm('Remove icon from this task?')) {
-      updateMutation.mutate({
-        id: task.id,
-        payload: { icon_path: null, icon_width: null, icon_height: null },
-      });
-    }
+  const handleRemoveIcon = () => {
+    setEditIconDraft({
+      file: null,
+      remove: true,
+      width: null,
+      height: null,
+      hasFileChange: false,
+      hasSizeChange: false,
+    });
   };
 
   const handleUpdateEventTime = async (taskId: number, date: string, startTime: string | null) => {
@@ -192,6 +279,7 @@ export default function App() {
     if (updated) {
       setSelectedTask(updated);
     }
+    // Don't close modal when task is deleted - user might want to see other tasks
   }, [tasks, selectedTask?.id]);
 
   // Save toggle states to session storage
@@ -200,25 +288,29 @@ export default function App() {
   }, [isTaskListOpen]);
 
   useEffect(() => {
+    if (!selectedTask) {
+      setEditIconDraft(null);
+      return;
+    }
+
+    setEditIconDraft((prev) => {
+      if (prev) {
+        return prev;
+      }
+      return {
+        file: null,
+        remove: false,
+        width: selectedTask.icon_width ?? null,
+        height: selectedTask.icon_height ?? null,
+        hasFileChange: false,
+        hasSizeChange: false,
+      };
+    });
+  }, [selectedTask]);
+
+  useEffect(() => {
     sessionStorage.setItem('isLeftSidebarOpen', JSON.stringify(isLeftSidebarOpen));
   }, [isLeftSidebarOpen]);
-
-  // Heartbeat to keep server alive
-  useEffect(() => {
-    // Send initial heartbeat
-    sendHeartbeat();
-
-    // Send heartbeat every 3 seconds
-    const heartbeatInterval = setInterval(() => {
-      sendHeartbeat();
-    }, 3000);
-
-    // CURSOR: Removed automatic shutdown on beforeunload as it triggers on page refresh
-
-    return () => {
-      clearInterval(heartbeatInterval);
-    };
-  }, []);
 
   const defaultStartDate = useMemo(() => {
     const dateToUse = selectedDate || new Date();
@@ -229,6 +321,14 @@ export default function App() {
   }, [selectedDate]);
 
   const hasRecurrence = selectedTask?.recurrence !== "once";
+
+  const newTaskDefaultValues = useMemo(() => ({
+    start_date: defaultStartDate,
+  }), [defaultStartDate]);
+
+  const selectedTaskDefaultValues = useMemo(() => (
+    selectedTask ? { ...selectedTask } : undefined
+  ), [selectedTask]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
@@ -250,12 +350,11 @@ export default function App() {
           </button>
           <h2 style={{ margin: "0 0 1rem 0", fontSize: "1.125rem" }}>Create New Task</h2>
           <TaskForm
+            key={newTaskFormResetKey}
             onSubmit={handleSubmit}
             onClear={handleRemovePendingIcon}
             submitting={createMutation.isPending}
-            defaultValues={{
-              start_date: defaultStartDate,
-            }}
+            defaultValues={newTaskDefaultValues}
           >
             <IconUploader
               ref={newTaskIconUploaderRef}
@@ -324,34 +423,42 @@ export default function App() {
           onClose={() => setEditingEventDate(null)}
           onEditTask={handleEdit}
           onDeleteTask={handleDelete}
+          onDeleteOccurrence={handleDeleteOccurrence}
         />
       )}
 
-      {isEditModalOpen && selectedTask && (
+      {isEditModalOpen && (
         <div className="modal-overlay" onClick={handleCancelEdit}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ marginTop: 0 }}>Edit Task</h2>
-            <TaskForm
+            <h2 style={{ marginTop: 0 }}>{selectedTask ? 'Edit Task' : 'Task Deleted'}</h2>
+            {selectedTask && <TaskForm
               onSubmit={handleSubmit}
               onCancel={handleCancelEdit}
               submitting={updateMutation.isPending}
-              defaultValues={{
-                ...selectedTask,
-              }}
+              defaultValues={selectedTaskDefaultValues}
             >
               <div style={{ marginTop: "1rem" }}>
                 <IconUploader
                   ref={iconUploaderRef}
                   taskId={selectedTask.id}
-                  iconPath={selectedTask.icon_path ?? undefined}
-                  iconWidth={selectedTask.icon_width ?? undefined}
-                  iconHeight={selectedTask.icon_height ?? undefined}
-                  onUpload={(file) => handleUpload(selectedTask, file)}
+                  iconPath={editIconDraft?.remove ? null : selectedTask.icon_path ?? undefined}
+                  iconWidth={editIconDraft?.width ?? selectedTask.icon_width ?? undefined}
+                  iconHeight={editIconDraft?.height ?? selectedTask.icon_height ?? undefined}
+                  onUpload={handleEditIconUpload}
                   onResize={(dimensions) => handleResize(selectedTask, dimensions)}
-                  onRemove={() => handleRemoveIcon(selectedTask)}
+                  onRemove={handleRemoveIcon}
+                  deferActions
                 />
               </div>
-            </TaskForm>
+            </TaskForm>}
+            {!selectedTask && (
+              <div style={{ textAlign: 'center', padding: '2rem' }}>
+                <p style={{ marginBottom: '1rem', color: '#6b7280' }}>This task has been deleted.</p>
+                <button className="primary-button" onClick={handleCancelEdit}>
+                  Close
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

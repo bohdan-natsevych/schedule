@@ -72,6 +72,7 @@ export interface TaskDayOverride {
   icon_path?: string | null;
   icon_width?: number | null;
   icon_height?: number | null;
+  is_hidden?: boolean;  // COPILOT: Hide specific occurrence of recurring task
 }
 
 export type TaskDayOverrideCreate = Omit<TaskDayOverride, "id">;

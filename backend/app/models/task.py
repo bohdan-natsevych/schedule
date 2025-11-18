@@ -1,4 +1,3 @@
-from datetime import date, time
 from sqlalchemy import Column, Integer, String, Date, Time, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 
@@ -52,5 +51,6 @@ class TaskDayOverride(Base):
     icon_path = Column(String, nullable=True)
     icon_width = Column(Integer, nullable=True)
     icon_height = Column(Integer, nullable=True)
+    is_hidden = Column(Boolean, default=False)  # COPILOT: Hide specific occurrence of recurring task
 
     task = relationship("Task", back_populates="day_overrides")

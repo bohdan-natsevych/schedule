@@ -10,6 +10,7 @@ interface EventTimeEditorProps {
   onClose: () => void;
   onEditTask: (task: Task) => void;
   onDeleteTask: (task: Task) => void;
+  onDeleteOccurrence?: (taskId: number, date: string) => Promise<void>;
 }
 
 interface EventWithTime {
@@ -19,6 +20,71 @@ interface EventWithTime {
   override?: TaskDayOverride;
 }
 
+interface DeleteConfirmModalProps {
+  task: Task;
+  date: string;
+  onConfirm: (deleteAll: boolean) => void;
+  onCancel: () => void;
+}
+
+const DeleteConfirmModal = ({ task, date, onConfirm, onCancel }: DeleteConfirmModalProps) => {
+  return (
+    <div className="modal-overlay" onClick={onCancel}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "500px" }}>
+        <h2 style={{ marginTop: 0, fontSize: "1.5rem" }}>🗑️ Delete Task</h2>
+        <p style={{ color: "#6b7280", marginBottom: "1.5rem" }}>
+          <strong>"{task.title}"</strong> is a recurring task. What would you like to delete?
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => onConfirm(false)}
+            style={{ justifyContent: "flex-start", padding: "1rem" }}
+          >
+            <div>
+              <div style={{ fontWeight: "700", marginBottom: "0.25rem" }}>
+                📅 Only this occurrence ({format(parseISO(date), "MMM d, yyyy")})
+              </div>
+              <div style={{ fontSize: "0.875rem", opacity: 0.9 }}>
+                The task will still appear on other dates
+              </div>
+            </div>
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => onConfirm(true)}
+            style={{
+              justifyContent: "flex-start",
+              padding: "1rem",
+              borderColor: "#ef4444",
+              color: "#dc2626",
+            }}
+          >
+            <div>
+              <div style={{ fontWeight: "700", marginBottom: "0.25rem" }}>
+                🗑️ All occurrences
+              </div>
+              <div style={{ fontSize: "0.875rem", opacity: 0.9 }}>
+                Permanently delete the entire task
+              </div>
+            </div>
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={onCancel}
+            style={{ marginTop: "0.5rem" }}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function EventTimeEditor({
   date,
   tasks,
@@ -27,8 +93,10 @@ export default function EventTimeEditor({
   onClose,
   onEditTask,
   onDeleteTask,
+  onDeleteOccurrence,
 }: EventTimeEditorProps) {
   const [events, setEvents] = useState<EventWithTime[]>([]);
+  const [deleteConfirmTask, setDeleteConfirmTask] = useState<Task | null>(null);
   const dateStr = format(date, "yyyy-MM-dd");
 
   useEffect(() => {
@@ -69,6 +137,9 @@ export default function EventTimeEditor({
       if (occursOnDate) {
         // CURSOR: Use override time if exists, otherwise use task's default time
         const override = overrideMap.get(task.id);
+        if (override?.is_hidden) {
+          continue;
+        }
         const startTime = override?.start_time || task.start_time || "09:00";
         eventsForDay.push({
           task,
@@ -174,11 +245,40 @@ export default function EventTimeEditor({
     });
   };
 
+  const handleDeleteClick = (task: Task) => {
+    // COPILOT: For recurring tasks, show confirmation modal
+    if (task.recurrence !== "once") {
+      setDeleteConfirmTask(task);
+    } else {
+      // COPILOT: For single tasks, delete directly and keep modal open
+      onDeleteTask(task);
+      setEvents((prev) => prev.filter((event) => event.task.id !== task.id));
+    }
+  };
+
+  const handleDeleteConfirm = async (deleteAll: boolean) => {
+    if (!deleteConfirmTask) return;
+
+    if (deleteAll) {
+      // COPILOT: Delete entire task (all occurrences)
+      onDeleteTask(deleteConfirmTask);
+      setEvents((prev) => prev.filter((event) => event.task.id !== deleteConfirmTask.id));
+    } else {
+      // COPILOT: Hide only this occurrence
+      if (onDeleteOccurrence) {
+        await onDeleteOccurrence(deleteConfirmTask.id, dateStr);
+      }
+      setEvents((prev) => prev.filter((event) => event.task.id !== deleteConfirmTask.id));
+    }
+
+    setDeleteConfirmTask(null);
+  };
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content event-order-modal" onClick={(e) => e.stopPropagation()}>
         <div className="event-order-header">
-          <h2>📅 Event Order</h2>
+          <h2>📅 Daily Schedule</h2>
           <p className="event-order-date">{format(date, "MMMM d, yyyy")}</p>
         </div>
         
@@ -242,7 +342,7 @@ export default function EventTimeEditor({
                   </button>
                   <button
                     type="button"
-                    onClick={() => onDeleteTask(event.task)}
+                    onClick={() => handleDeleteClick(event.task)}
                     className="event-action-btn delete-btn"
                     title="Delete task"
                   >
@@ -257,13 +357,22 @@ export default function EventTimeEditor({
         
         <div className="event-order-footer">
           <button type="button" className="primary-button" onClick={handleSave}>
-            💾 Save Order
+            OK
           </button>
           <button type="button" className="secondary-button" onClick={onClose}>
             Cancel
           </button>
         </div>
       </div>
+
+      {deleteConfirmTask && (
+        <DeleteConfirmModal
+          task={deleteConfirmTask}
+          date={dateStr}
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => setDeleteConfirmTask(null)}
+        />
+      )}
     </div>
   );
 }

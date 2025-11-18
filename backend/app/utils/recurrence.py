@@ -43,7 +43,10 @@ def expand_task(
         end_date = min(task_end, end)
         occurrences = []
         while current <= end_date:
-            occurrences.append((current, overrides.get(current)))
+            override = overrides.get(current)
+            # COPILOT: Skip hidden occurrences
+            if not (override and override.is_hidden):
+                occurrences.append((current, override))
             current += timedelta(days=1)
         
         for idx, (occ_date, override) in enumerate(occurrences):
@@ -57,7 +60,10 @@ def expand_task(
         end_date = min(task_end, end)
         occurrences = []
         while current <= end_date:
-            occurrences.append((current, overrides.get(current)))
+            override = overrides.get(current)
+            # COPILOT: Skip hidden occurrences
+            if not (override and override.is_hidden):
+                occurrences.append((current, override))
             current += timedelta(days=1)
         
         for idx, (occ_date, override) in enumerate(occurrences):
@@ -74,7 +80,10 @@ def expand_task(
         occurrences = []
         while current <= end_date:
             if current.weekday() in weekdays:
-                occurrences.append((current, overrides.get(current)))
+                override = overrides.get(current)
+                # COPILOT: Skip hidden occurrences
+                if not (override and override.is_hidden):
+                    occurrences.append((current, override))
             current += delta
         
         for idx, (occ_date, override) in enumerate(occurrences):

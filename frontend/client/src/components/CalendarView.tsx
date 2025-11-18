@@ -1,5 +1,5 @@
-import { useMemo, useState, useEffect } from "react";
-import { Calendar, dateFnsLocalizer, Event, View } from "react-big-calendar";
+import { useMemo, useState, useEffect, FC } from "react";
+import { Calendar, dateFnsLocalizer, Event, View, ToolbarProps, Navigate } from "react-big-calendar";
 import { format, parse, startOfWeek, getDay, parseISO } from "date-fns";
 
 import { Task, TaskDayOverride } from "../types";
@@ -27,8 +27,50 @@ interface CalendarViewProps {
 }
 
 interface CalendarEvent extends Event {
-  resource: Task;
+  resource?: Task;
 }
+
+// Custom toolbar with navigation buttons on sides of month label
+const CustomToolbar: FC<ToolbarProps<CalendarEvent, object>> = (props) => {
+  const { label, onNavigate, onView, view } = props;
+
+  return (
+    <div className="rbc-toolbar">
+      <div className="rbc-btn-group">
+        <button type="button" onClick={() => onNavigate(Navigate.TODAY)}>
+          Today
+        </button>
+      </div>
+
+      <div className="rbc-btn-group rbc-toolbar-center">
+        <button type="button" className="rbc-nav-btn" onClick={() => onNavigate(Navigate.PREVIOUS)}>
+          Back
+        </button>
+        <span className="rbc-toolbar-label">{label}</span>
+        <button type="button" className="rbc-nav-btn" onClick={() => onNavigate(Navigate.NEXT)}>
+          Next
+        </button>
+      </div>
+
+      <div className="rbc-btn-group">
+        <button
+          type="button"
+          className={view === "month" ? "rbc-active" : ""}
+          onClick={() => onView("month")}
+        >
+          Month
+        </button>
+        <button
+          type="button"
+          className={view === "agenda" ? "rbc-active" : ""}
+          onClick={() => onView("agenda")}
+        >
+          Agenda
+        </button>
+      </div>
+    </div>
+  );
+};
 
 export default function CalendarView({
   tasks,
@@ -61,6 +103,9 @@ export default function CalendarView({
         // CURSOR: Check for override times for this specific date
         const overrideKey = `${task.id}-${startDate}`;
         const override = overrideMap.get(overrideKey);
+        if (override?.is_hidden) {
+          continue;
+        }
         const startTime = override?.start_time || task.start_time;
         const endTime = override?.end_time || task.end_time;
         
@@ -103,6 +148,10 @@ export default function CalendarView({
             const dateStr = format(currentDate, "yyyy-MM-dd");
             const overrideKey = `${task.id}-${dateStr}`;
             const override = overrideMap.get(overrideKey);
+            if (override?.is_hidden) {
+              currentDate = new Date(currentDate.getTime() + 24 * 60 * 60 * 1000);
+              continue;
+            }
             
             // CURSOR: Use override times if they exist, otherwise use task's default times
             const startTime = override?.start_time || task.start_time;
@@ -182,7 +231,7 @@ export default function CalendarView({
           lastClickedDate.getMonth() === event.start.getMonth() &&
           lastClickedDate.getFullYear() === event.start.getFullYear() &&
           lastClickWasOnEvent) {
-        // Double-click on event - open event order modal
+        // Double-click on event - open daily schedule modal
         if (onEditDayEvents) {
           onEditDayEvents(event.start);
         }
@@ -212,7 +261,7 @@ export default function CalendarView({
             className="primary-button"
             onClick={() => onEditDayEvents(selectedDate)}
           >
-            Edit Event Order for {format(selectedDate, "MMM d, yyyy")}
+            Edit Daily Schedule for {format(selectedDate, "MMM d, yyyy")}
           </button>
         </div>
       )}
@@ -234,6 +283,7 @@ export default function CalendarView({
           agendaTimeRangeFormat: () => "",
         }}
         components={{
+          toolbar: CustomToolbar,
           event: ({ event }: { event: CalendarEvent }) => <span>{event.title}</span>,
         }}
         style={{ height: "100%" }}

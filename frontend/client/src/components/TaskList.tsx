@@ -1,5 +1,5 @@
 import { Task } from "../types";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, isValid } from "date-fns";
 import { useState, useMemo } from "react";
 
 interface TaskListProps {
@@ -26,13 +26,52 @@ const getRecurrenceColor = (recurrence: string) => {
   }
 };
 
+const WEEKDAY_LABELS: Record<string, string> = {
+  sun: "Sun",
+  mon: "Mon",
+  tue: "Tue",
+  wed: "Wed",
+  thu: "Thu",
+  fri: "Fri",
+  sat: "Sat",
+};
+
+const formatDateLabel = (isoDate?: string | null) => {
+  if (!isoDate) return "No date";
+  const parsed = parseISO(isoDate);
+  return isValid(parsed) ? format(parsed, "MMM d, yyyy") : isoDate;
+};
+
+const formatTimeLabel = (timeValue?: string | null) => {
+  const source = timeValue ?? "09:00";
+  const [hourPart, minutePart] = source.split(":");
+  const hour = Number.parseInt(hourPart ?? "9", 10);
+  const minute = Number.parseInt(minutePart ?? "0", 10);
+  if (Number.isNaN(hour) || Number.isNaN(minute)) {
+    return source;
+  }
+  const safeHour = String(Math.min(Math.max(hour, 0), 23)).padStart(2, "0");
+  const paddedMinute = String(Math.min(Math.max(minute, 0), 59)).padStart(2, "0");
+  return `${safeHour}:${paddedMinute}`;
+};
+
+const formatWeekdayMask = (mask?: string | null) => {
+  if (!mask) return null;
+  const labels = mask
+    .split(",")
+    .map((value) => value.trim().toLowerCase().slice(0, 3))
+    .map((key) => WEEKDAY_LABELS[key])
+    .filter(Boolean);
+  return labels.length ? labels.join(", ") : null;
+};
+
 export default function TaskList({ tasks, onEdit, onDelete }: TaskListProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [startDateFilter, setStartDateFilter] = useState("");
   const [endDateFilter, setEndDateFilter] = useState("");
 
   const filteredTasks = useMemo(() => {
-    return tasks.filter(task => {
+    const filtered = tasks.filter(task => {
       // Search filter
       const matchesSearch = searchQuery === "" || 
         task.title.toLowerCase().includes(searchQuery.toLowerCase());
@@ -57,6 +96,21 @@ export default function TaskList({ tasks, onEdit, onDelete }: TaskListProps) {
       }
       
       return matchesSearch && matchesDateRange;
+    });
+    const getStartDateTime = (task: Task) => {
+      const datePart = task.start_date;
+      const timePart = task.start_time ?? "00:00";
+      const composed = `${datePart}T${timePart}`;
+      const parsed = parseISO(composed);
+      return isValid(parsed) ? parsed.getTime() : Number.MAX_SAFE_INTEGER;
+    };
+
+    return filtered.sort((a, b) => {
+      const diff = getStartDateTime(a) - getStartDateTime(b);
+      if (diff !== 0) {
+        return diff;
+      }
+      return a.title.localeCompare(b.title);
     });
   }, [tasks, searchQuery, startDateFilter, endDateFilter]);
 
@@ -134,6 +188,9 @@ export default function TaskList({ tasks, onEdit, onDelete }: TaskListProps) {
               <div className="task-card-content">
                 <div className="task-card-header">
                   <h4 className="task-card-title">{task.title}</h4>
+                  {task.icon_path && (
+                    <span className="task-icon-badge" title="This task uses a custom icon">🖼</span>
+                  )}
                   <span 
                     className="task-recurrence-badge" 
                     style={{ backgroundColor: getRecurrenceColor(task.recurrence) }}
@@ -143,14 +200,22 @@ export default function TaskList({ tasks, onEdit, onDelete }: TaskListProps) {
                 </div>
                 <div className="task-card-meta">
                   <span className="task-meta-item">
-                    📅 {format(new Date(task.start_date), "MMM d, yyyy")}
+                    📅 {formatDateLabel(task.start_date)}
+                    {task.recurrence !== "once" && (
+                      <>
+                        <span className="task-meta-separator" aria-hidden>→</span>
+                        {task.end_date
+                          ? formatDateLabel(task.end_date)
+                          : <span className="task-meta-fallback">No end date</span>}
+                      </>
+                    )}
                   </span>
                   <span className="task-meta-item">
-                    🕐 {task.start_time || "09:00"}
+                    🕒 {formatTimeLabel(task.start_time)}
                   </span>
-                  {task.recurrence !== "once" && task.end_date && (
+                  {task.recurrence === "weekly" && (
                     <span className="task-meta-item">
-                      ↔ {format(new Date(task.end_date), "MMM d, yyyy")}
+                      📆 {formatWeekdayMask(task.weekday_mask) ?? "No days"}
                     </span>
                   )}
                 </div>

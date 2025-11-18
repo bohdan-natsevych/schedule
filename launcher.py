@@ -5,13 +5,28 @@ This script launches the backend server and serves the frontend.
 import sys
 import os
 import webbrowser
+import socket
 from pathlib import Path
 import uvicorn
 from threading import Timer
 
-def open_browser():
+
+def open_browser(port: int) -> None:
     """Open browser after a short delay"""
-    webbrowser.open('http://localhost:8000')
+    webbrowser.open(f"http://localhost:{port}")
+
+
+def find_available_port(start_port: int = 8000, max_attempts: int = 10) -> int:
+    """Return first available port in range starting at start_port."""
+    for port in range(start_port, start_port + max_attempts):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            try:
+                sock.bind(("127.0.0.1", port))
+            except OSError:
+                continue
+            return port
+    return start_port
+
 
 def get_base_path():
     """Get the base path for bundled or development mode"""
@@ -21,6 +36,7 @@ def get_base_path():
     else:
         # Running in development
         return Path(__file__).parent
+
 
 def get_app_data_path():
     """Get the path where data should be stored (outside of _MEIPASS)"""
@@ -35,6 +51,7 @@ def get_app_data_path():
     else:
         # Running in development
         return Path(__file__).parent
+
 
 def main():
     base_path = get_base_path()
@@ -78,8 +95,10 @@ def main():
                 return FileResponse(str(file_path))
             return FileResponse(str(frontend_dist / "index.html"))
     
+    port = find_available_port()
+
     # Open browser after 1.5 seconds
-    Timer(1.5, open_browser).start()
+    Timer(1.5, open_browser, args=(port,)).start()
     
     # Run the server
     print("=" * 50)
@@ -88,9 +107,11 @@ def main():
     print("Starting server...")
     print("The application will open in your browser automatically.")
     print(f"Data location: {app_data_path}")
+    print(f"Server URL: http://localhost:{port}")
     print("\nTo stop the application, close this window.")
     print("=" * 50)
-    uvicorn.run(app, host="localhost", port=8000, log_level="info")
+    uvicorn.run(app, host="localhost", port=port, log_level="info")
+
 
 if __name__ == "__main__":
     main()

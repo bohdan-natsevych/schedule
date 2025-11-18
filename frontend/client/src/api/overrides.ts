@@ -20,13 +20,15 @@ export async function upsertOverride(
   taskId: number,
   date: string,
   startTime?: string | null,
-  endTime?: string | null
+  endTime?: string | null,
+  isHidden?: boolean
 ): Promise<TaskDayOverride> {
   const params = new URLSearchParams();
   params.append("task_id", taskId.toString());
   params.append("override_date", date);
   if (startTime) params.append("start_time", startTime);
   if (endTime) params.append("end_time", endTime);
+  if (typeof isHidden === "boolean") params.append("is_hidden", String(isHidden));
   
   const response = await api.put(`/overrides/upsert?${params.toString()}`);
   return response.data;
@@ -55,5 +57,12 @@ export async function updateOverrideIconSize(
     icon_height: iconHeight,
   });
   return data;
+}
+
+export async function hideOccurrence(
+  taskId: number,
+  date: string
+): Promise<TaskDayOverride> {
+  return upsertOverride(taskId, date, null, null, true);
 }
 

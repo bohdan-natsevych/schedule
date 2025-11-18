@@ -8,6 +8,7 @@ interface IconUploaderProps {
   onUpload: (file: File) => Promise<void> | void;
   onResize: (dimensions: { icon_width: number; icon_height: number }) => void;
   onRemove?: () => void;
+  deferActions?: boolean;
 }
 
 export interface IconUploaderRef {
@@ -24,16 +25,17 @@ const IconUploader = forwardRef<IconUploaderRef, IconUploaderProps>(({
   onUpload,
   onResize,
   onRemove,
+  deferActions = false,
 }, ref) => {
   const [preview, setPreview] = useState(iconPath ?? null);
   const [width, setWidth] = useState(iconWidth ?? 150);
   const [height, setHeight] = useState(iconHeight ?? 150);
-  const [tempWidth, setTempWidth] = useState(iconWidth ?? 150);
-  const [tempHeight, setTempHeight] = useState(iconHeight ?? 150);
+  const [tempWidth, setTempWidth] = useState<number | ''>(iconWidth ?? 150);
+  const [tempHeight, setTempHeight] = useState<number | ''>(iconHeight ?? 150);
   const [sizePreset, setSizePreset] = useState<SizePreset>('medium');
   const [aspectRatio, setAspectRatio] = useState<number>(1);
   const [naturalAspectRatio, setNaturalAspectRatio] = useState<number>(1);
-  const resizeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const resizeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
 
   const SIZE_PRESETS = {
@@ -46,8 +48,9 @@ const IconUploader = forwardRef<IconUploaderRef, IconUploaderProps>(({
     const file = event.target.files?.[0];
     if (!file) return;
     
-    // For new tasks (no taskId), show preview immediately and calculate aspect ratio
-    if (!taskId) {
+    const shouldPreviewLocally = deferActions || !taskId;
+
+    if (shouldPreviewLocally) {
       const reader = new FileReader();
       reader.onloadend = () => {
         const result = reader.result as string;
@@ -68,6 +71,7 @@ const IconUploader = forwardRef<IconUploaderRef, IconUploaderProps>(({
           setTempWidth(mediumWidth);
           setTempHeight(mediumHeight);
           setSizePreset('medium');
+          onResize({ icon_width: mediumWidth, icon_height: mediumHeight });
         };
         img.src = result;
       };
@@ -108,7 +112,7 @@ const IconUploader = forwardRef<IconUploaderRef, IconUploaderProps>(({
     // Allow typing any numeric value, validate on blur
     const parsed = parseInt(value);
     if (!isNaN(parsed) || value === '') {
-      setTempWidth(value === '' ? '' as any : parsed);
+      setTempWidth(value === '' ? '' : parsed);
       
       if (!isNaN(parsed)) {
         setSizePreset('custom');
@@ -122,7 +126,7 @@ const IconUploader = forwardRef<IconUploaderRef, IconUploaderProps>(({
     // Allow typing any numeric value, validate on blur
     const parsed = parseInt(value);
     if (!isNaN(parsed) || value === '') {
-      setTempHeight(value === '' ? '' as any : parsed);
+      setTempHeight(value === '' ? '' : parsed);
       
       if (!isNaN(parsed)) {
         setSizePreset('custom');
@@ -213,6 +217,14 @@ const IconUploader = forwardRef<IconUploaderRef, IconUploaderProps>(({
     };
   }, []);
 
+  const handleRemoveClick = () => {
+    const shouldPreviewLocally = deferActions || !taskId;
+    if (shouldPreviewLocally) {
+      setPreview(null);
+    }
+    onRemove?.();
+  };
+
   return (
     <div className="icon-uploader-container">
       <label htmlFor={`icon-${taskId}`} className="form-field-label">Icon</label>
@@ -231,7 +243,7 @@ const IconUploader = forwardRef<IconUploaderRef, IconUploaderProps>(({
           <button 
             type="button" 
             className="icon-remove-button" 
-            onClick={onRemove}
+            onClick={handleRemoveClick}
             title="Remove icon"
           >
             ✕

@@ -3,7 +3,7 @@ from typing import List
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Query
 from sqlalchemy.orm import Session
 
 from app import models, schemas
@@ -27,6 +27,21 @@ def create_override(
 ) -> schemas.TaskDayOverride:
     """CURSOR: Create a new per-day time override"""
     return override_crud.create_override(db, override)
+
+
+@router.post("/action/hide-occurrence", response_model=schemas.TaskDayOverride)
+def hide_occurrence(
+    task_id: int = Query(...),
+    occurrence_date: date = Query(...),
+    db: Session = Depends(get_db),
+) -> schemas.TaskDayOverride:
+    """COPILOT: Hide a specific occurrence of a recurring task"""
+    return override_crud.upsert_override(
+        db, task_id, occurrence_date,
+        start_time=None,
+        end_time=None,
+        is_hidden=True
+    )
 
 
 @router.get("/{override_id}", response_model=schemas.TaskDayOverride)
@@ -58,6 +73,7 @@ def upsert_override(
     override_date: date,
     start_time: str | None = None,
     end_time: str | None = None,
+    is_hidden: bool | None = None,
     db: Session = Depends(get_db),
 ) -> schemas.TaskDayOverride:
     """CURSOR: Create or update an override for a specific task and date"""
@@ -80,7 +96,14 @@ def upsert_override(
         except (ValueError, IndexError):
             raise HTTPException(status_code=400, detail="Invalid end_time format. Use HH:MM")
     
-    return override_crud.upsert_override(db, task_id, override_date, parsed_start_time, parsed_end_time)
+    return override_crud.upsert_override(
+        db,
+        task_id,
+        override_date,
+        parsed_start_time,
+        parsed_end_time,
+        is_hidden=is_hidden,
+    )
 
 
 @router.put("/{override_id}", response_model=schemas.TaskDayOverride)

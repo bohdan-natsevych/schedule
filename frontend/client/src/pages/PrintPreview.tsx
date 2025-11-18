@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import Header from "../components/Header";
 import { preparePrint } from "../api/tasks";
-import { sendHeartbeat } from "../api/client";
 import { PrintRequest, TaskOccurrence } from "../types";
 
 const formatDate = (date: Date) => {
@@ -32,7 +31,16 @@ const DEFAULT_SETTINGS: EditorSettings = {
   fontFamily: "Segoe UI",
 };
 
+const ICON_HORIZONTAL_GAP = 16;
+
 export default function PrintPreview() {
+  useEffect(() => {
+    document.body.classList.add("print-preview-mode");
+    return () => {
+      document.body.classList.remove("print-preview-mode");
+    };
+  }, []);
+
   const [filters, setFilters] = useState<PrintRequest>({
     from_date: defaultFrom,
     to_date: defaultTo,
@@ -43,6 +51,13 @@ export default function PrintPreview() {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const [pageCount, setPageCount] = useState(1);
   const pageHeightRef = useRef<number | null>(null);
+  const manualPositionsRef = useRef<Map<string, { left: number; top: number }>>(new Map());
+  const [manualPositionsVersion, setManualPositionsVersion] = useState(0);
+  const [autoLayoutTick, setAutoLayoutTick] = useState(0);
+  const [draggingKey, setDraggingKey] = useState<string | null>(null);
+  const dragStartPos = useRef<{ x: number; y: number; iconLeft: number; iconTop: number; key: string } | null>(null);
+  const activeDragWrapper = useRef<HTMLDivElement | null>(null);
+  const latestDragPosition = useRef<{ key: string; left: number; top: number } | null>(null);
 
   const query = useQuery({
     queryKey: ["print", filters],
@@ -53,30 +68,18 @@ export default function PrintPreview() {
 
   useEffect(() => {
     setCustomLines(occurrences);
+    manualPositionsRef.current.clear();
+    setManualPositionsVersion((version) => version + 1);
+    setAutoLayoutTick((tick) => tick + 1);
   }, [occurrences]);
-
-  // Heartbeat to keep server alive
-  useEffect(() => {
-    // Send initial heartbeat
-    sendHeartbeat();
-
-    // Send heartbeat every 3 seconds
-    const heartbeatInterval = setInterval(() => {
-      sendHeartbeat();
-    }, 3000);
-
-    // CURSOR: Removed automatic shutdown on beforeunload as it triggers on page refresh
-
-    return () => {
-      clearInterval(heartbeatInterval);
-    };
-  }, []);
 
   const warning = useMemo(() => {
     if (!query.data) return null;
     if (!query.data.missing_days.length) return null;
     return `No tasks on: ${query.data.missing_days.join(", ")}`;
   }, [query.data]);
+
+  const manualPositionCount = manualPositionsRef.current.size;
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
@@ -183,6 +186,263 @@ export default function PrintPreview() {
     };
   }, [customLines, filters.font_size, settings.fontFamily, settings.lineGap]);
 
+  const handleIconMouseDown = (event: React.MouseEvent<HTMLImageElement>, index: number) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const img = event.currentTarget;
+    const wrapper = img.closest<HTMLDivElement>(".print-line-image");
+    if (!wrapper || !editorRef.current) return;
+
+    const key = wrapper.dataset.iconKey ?? `icon-${index}`;
+    wrapper.dataset.iconKey = key;
+
+    const editorRect = editorRef.current.getBoundingClientRect();
+    const savedPosition = manualPositionsRef.current.get(key);
+    const wrapperRect = wrapper.getBoundingClientRect();
+
+    const currentLeft = savedPosition?.left ?? wrapperRect.left - editorRect.left;
+    const currentTop = savedPosition?.top ?? wrapperRect.top - editorRect.top;
+
+    wrapper.classList.add("manual-positioned");
+    wrapper.style.position = "absolute";
+    wrapper.style.marginLeft = "0";
+    wrapper.style.left = `${currentLeft}px`;
+    wrapper.style.top = `${currentTop}px`;
+
+    activeDragWrapper.current = wrapper;
+    dragStartPos.current = {
+      x: event.clientX,
+      y: event.clientY,
+      iconLeft: currentLeft,
+      iconTop: currentTop,
+      key,
+    };
+    latestDragPosition.current = { key, left: currentLeft, top: currentTop };
+
+    document.body.style.cursor = "grabbing";
+    setDraggingKey(key);
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!dragStartPos.current || !activeDragWrapper.current) return;
+
+      const deltaX = e.clientX - dragStartPos.current.x;
+      const deltaY = e.clientY - dragStartPos.current.y;
+
+      const newLeft = dragStartPos.current.iconLeft + deltaX;
+      const newTop = dragStartPos.current.iconTop + deltaY;
+
+      activeDragWrapper.current.style.left = `${newLeft}px`;
+      activeDragWrapper.current.style.top = `${newTop}px`;
+
+      latestDragPosition.current = { key, left: newLeft, top: newTop };
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.removeProperty("cursor");
+
+      setDraggingKey(null);
+
+      if (latestDragPosition.current && latestDragPosition.current.key === key) {
+        const { left, top } = latestDragPosition.current;
+        manualPositionsRef.current.set(key, { left, top });
+        setManualPositionsVersion((version) => version + 1);
+      }
+
+      dragStartPos.current = null;
+      activeDragWrapper.current = null;
+      latestDragPosition.current = null;
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  };
+
+  const handleResetIconPositions = () => {
+    manualPositionsRef.current.clear();
+    if (editorRef.current) {
+      const wrappers = editorRef.current.querySelectorAll<HTMLDivElement>(".print-line-image");
+      wrappers.forEach((wrapper) => {
+        wrapper.classList.remove("manual-positioned");
+        wrapper.style.position = "";
+        wrapper.style.left = "";
+        wrapper.style.top = "";
+        wrapper.style.marginLeft = "";
+      });
+    }
+    setManualPositionsVersion((version) => version + 1);
+    setAutoLayoutTick((tick) => tick + 1);
+  };
+
+  const applyManualIconStyles = (
+    editor: HTMLDivElement,
+    icons: HTMLImageElement[],
+    editorRect: DOMRect
+  ) => {
+    const placements: Array<{ top: number; bottom: number; left: number; right: number }> = [];
+
+    icons.forEach((img) => {
+      const wrapper = img.closest<HTMLDivElement>(".print-line-image");
+      if (!wrapper) return;
+
+      const key = wrapper.dataset.iconKey;
+      if (!key) return;
+
+      const manualPos = manualPositionsRef.current.get(key);
+      if (!manualPos) {
+        wrapper.classList.remove("manual-positioned");
+        wrapper.style.position = "";
+        wrapper.style.left = "";
+        wrapper.style.top = "";
+        wrapper.style.marginLeft = "";
+        return;
+      }
+
+      const rect = img.getBoundingClientRect();
+      const imgWidth = rect.width;
+      const imgHeight = rect.height;
+
+      wrapper.style.display = "";
+      wrapper.classList.add("manual-positioned");
+      wrapper.style.position = "absolute";
+      wrapper.style.marginLeft = "0";
+      wrapper.style.left = `${manualPos.left}px`;
+      wrapper.style.top = `${manualPos.top}px`;
+      wrapper.style.removeProperty("--icon-offset");
+
+      const absoluteLeft = editorRect.left + manualPos.left;
+      const absoluteTop = editorRect.top + manualPos.top;
+
+      placements.push({
+        top: absoluteTop,
+        bottom: absoluteTop + imgHeight,
+        left: absoluteLeft,
+        right: absoluteLeft + imgWidth,
+      });
+    });
+
+    return placements;
+  };
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    const icons = Array.from(editor.querySelectorAll<HTMLImageElement>(".print-line-image img"));
+    if (!icons.length) return;
+
+    const editorRect = editor.getBoundingClientRect();
+    applyManualIconStyles(editor, icons, editorRect);
+  }, [manualPositionsVersion]);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    const distributeIcons = () => {
+      const icons = Array.from(editor.querySelectorAll<HTMLImageElement>(".print-line-image img"));
+      if (!icons.length) return;
+
+      const editorRect = editor.getBoundingClientRect();
+      const baseOffset = 100;
+      const placements = applyManualIconStyles(editor, icons, editorRect);
+
+      icons.forEach((img) => {
+        const wrapper = img.closest<HTMLDivElement>(".print-line-image");
+        if (!wrapper) return;
+        const key = wrapper.dataset.iconKey;
+        if (!key) return;
+
+        if (manualPositionsRef.current.has(key)) {
+          return;
+        }
+
+        const rect = img.getBoundingClientRect();
+        const imgWidth = rect.width;
+        const imgHeight = rect.height;
+        const lineTop = rect.top;
+        const lineBottom = rect.bottom;
+
+        const maxRight = editorRect.right - baseOffset;
+
+        let offset = 0;
+        let tryLeft = editorRect.left + baseOffset;
+
+        let collision = true;
+        let attempts = 0;
+        const maxAttempts = 50;
+
+        while (collision && attempts < maxAttempts) {
+          attempts++;
+          collision = false;
+          tryLeft = editorRect.left + baseOffset + offset;
+          const tryRight = tryLeft + imgWidth;
+
+          if (tryRight > maxRight) {
+            offset = 0;
+            tryLeft = editorRect.left + baseOffset;
+          }
+
+          for (const placed of placements) {
+            const horizontalOverlap = !(tryRight <= placed.left || tryLeft >= placed.right);
+            const verticalOverlap = !(lineBottom <= placed.top || lineTop >= placed.bottom);
+
+            if (horizontalOverlap && verticalOverlap) {
+              collision = true;
+              offset = placed.right - editorRect.left - baseOffset + ICON_HORIZONTAL_GAP;
+              break;
+            }
+          }
+
+          if (collision && tryLeft + imgWidth > maxRight) {
+            wrapper.style.display = "none";
+            return;
+          }
+        }
+
+        if (attempts >= maxAttempts) {
+          wrapper.style.display = "none";
+          return;
+        }
+
+        wrapper.style.display = "";
+        wrapper.style.setProperty("--icon-offset", `${offset}px`);
+
+        placements.push({
+          top: lineTop,
+          bottom: lineBottom,
+          left: tryLeft,
+          right: tryLeft + imgWidth,
+        });
+      });
+    };
+
+    distributeIcons();
+
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => distributeIcons()) : undefined;
+    resizeObserver?.observe(editor);
+
+    const handleResize = () => distributeIcons();
+    window.addEventListener("resize", handleResize);
+
+    const images = Array.from(editor.querySelectorAll<HTMLImageElement>(".print-line-image img"));
+    const cleanupImageListeners = images
+      .filter((img) => !img.complete)
+      .map((img) => {
+        const handleLoad = () => distributeIcons();
+        img.addEventListener("load", handleLoad, { once: true });
+        return () => img.removeEventListener("load", handleLoad);
+      });
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", handleResize);
+      cleanupImageListeners.forEach((cleanup) => cleanup());
+    };
+  }, [customLines, filters.font_size, settings.fontFamily, settings.lineGap, autoLayoutTick]);
+
   return (
     <div className="print-preview" style={{ gap: "1rem" }}>
       <div className="no-print">
@@ -246,9 +506,23 @@ export default function PrintPreview() {
         <div className="page-count-indicator" aria-live="polite">
           Estimated pages: <span>{pageCount}</span>
         </div>
+        {manualPositionCount > 0 && (
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={handleResetIconPositions}
+            title="Reset all manually positioned icons to automatic positioning"
+          >
+            Reset Icon Positions ({manualPositionCount})
+          </button>
+        )}
       </section>
 
       {warning && <div className="warning no-print">{warning}</div>}
+
+      <div className="no-print" style={{ textAlign: 'center', padding: '0.75rem', background: '#f0f9ff', borderRadius: '0.5rem', color: '#0369a1', fontWeight: 500, fontSize: '0.875rem', marginBottom: '1rem' }}>
+        💡 Tip: You can drag and drop icons to reposition them manually.
+      </div>
 
       {query.isLoading && <p>Loading...</p>}
       {!query.isLoading && !customLines.length && <p>No tasks in range.</p>}
@@ -267,26 +541,34 @@ export default function PrintPreview() {
           }}
           onInput={handleEditorInput}
         >
-          {customLines.map((item, index) => (
-            <div key={`${item.task_id}-${index}`} className="print-line">
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+          {customLines.map((item, index) => {
+            const iconKey = `icon-${index}`;
+            const isDragging = draggingKey === iconKey;
+
+            return (
+              <div key={`${item.task_id}-${index}`} className="print-line">
                 <span className="print-line-text">{item.title}</span>
-                {item.icon_path && (
-                  <img
-                    src={item.icon_path}
-                    alt="Task icon"
-                    data-width={item.icon_width ?? 150}
-                    data-height={item.icon_height ?? 150}
-                    style={{
-                      width: item.icon_width ?? 150,
-                      height: item.icon_height ?? 150,
-                      marginLeft: '100px',
-                    }}
-                  />
-                )}
+                <div className="print-line-image" style={{ "--icon-offset": "0px" } as CSSProperties} data-icon-key={iconKey}>
+                  {item.icon_path && (
+                    <img
+                      src={item.icon_path}
+                      alt="Task icon"
+                      data-width={item.icon_width ?? 150}
+                      data-height={item.icon_height ?? 150}
+                      draggable={false}
+                      style={{
+                        width: item.icon_width ?? 150,
+                        height: "auto",
+                        cursor: isDragging ? "grabbing" : "grab",
+                      }}
+                      onMouseDown={(e) => handleIconMouseDown(e, index)}
+                      className={isDragging ? "dragging" : ""}
+                    />
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
