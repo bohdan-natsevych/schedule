@@ -32,6 +32,7 @@ const IconUploader = forwardRef<IconUploaderRef, IconUploaderProps>(({
   const [height, setHeight] = useState(iconHeight ?? 150);
   const [tempWidth, setTempWidth] = useState<number | ''>(iconWidth ?? 150);
   const [tempHeight, setTempHeight] = useState<number | ''>(iconHeight ?? 150);
+  const [hasLocalPreview, setHasLocalPreview] = useState(false);
   const [sizePreset, setSizePreset] = useState<SizePreset>('medium');
   const [aspectRatio, setAspectRatio] = useState<number>(1);
   const [naturalAspectRatio, setNaturalAspectRatio] = useState<number>(1);
@@ -39,9 +40,9 @@ const IconUploader = forwardRef<IconUploaderRef, IconUploaderProps>(({
   const imgRef = useRef<HTMLImageElement>(null);
 
   const SIZE_PRESETS = {
-    small: { width: 100, height: 100 },
-    medium: { width: 150, height: 150 },
-    large: { width: 200, height: 200 },
+    small: { width: 75, height: 75 },
+    medium: { width: 112, height: 112 },
+    large: { width: 150, height: 150 },
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -55,6 +56,7 @@ const IconUploader = forwardRef<IconUploaderRef, IconUploaderProps>(({
       reader.onloadend = () => {
         const result = reader.result as string;
         setPreview(result);
+        setHasLocalPreview(true);
         
         // Load image to get natural dimensions
         const img = new Image();
@@ -174,17 +176,31 @@ const IconUploader = forwardRef<IconUploaderRef, IconUploaderProps>(({
   }));
 
   useEffect(() => {
-    setPreview(iconPath ?? null);
+    if (deferActions && hasLocalPreview) {
+      return;
+    }
+
     const w = iconWidth ?? 150;
     const h = iconHeight ?? 150;
+    setPreview(iconPath ?? null);
     setWidth(w);
     setHeight(h);
     setTempWidth(w);
     setTempHeight(h);
-    
+    if (hasLocalPreview) {
+      setHasLocalPreview(false);
+    }
+
     // Don't calculate aspect ratio from stored dimensions yet
     // Wait for image to load to get natural aspect ratio
-  }, [iconPath, iconHeight, iconWidth]);
+  }, [iconPath, iconHeight, iconWidth, deferActions, hasLocalPreview]);
+
+  useEffect(() => {
+    if (!taskId) {
+      return;
+    }
+    setHasLocalPreview(false);
+  }, [taskId]);
 
   useEffect(() => {
     // Determine which preset matches based on width and natural aspect ratio
@@ -222,6 +238,7 @@ const IconUploader = forwardRef<IconUploaderRef, IconUploaderProps>(({
     if (shouldPreviewLocally) {
       setPreview(null);
     }
+    setHasLocalPreview(false);
     onRemove?.();
   };
 

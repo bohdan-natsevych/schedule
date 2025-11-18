@@ -32,6 +32,10 @@ const DEFAULT_SETTINGS: EditorSettings = {
 };
 
 const ICON_HORIZONTAL_GAP = 16;
+const REMOVED_ICON_NO_PATH = "__removed_icon_no_path__";
+
+const buildIconKey = (occurrence: TaskOccurrence, index: number) =>
+  `${occurrence.task_id}|${occurrence.date}|${occurrence.start_time ?? `idx-${index}`}`;
 
 export default function PrintPreview() {
   useEffect(() => {
@@ -54,6 +58,9 @@ export default function PrintPreview() {
   const manualPositionsRef = useRef<Map<string, { left: number; top: number }>>(new Map());
   const [manualPositionsVersion, setManualPositionsVersion] = useState(0);
   const [autoLayoutTick, setAutoLayoutTick] = useState(0);
+  const removedIconsRef = useRef<Map<string, string | undefined>>(new Map());
+  const [removedIconsVersion, setRemovedIconsVersion] = useState(0);
+  const [lastActiveIconKey, setLastActiveIconKey] = useState<string | null>(null);
   const [draggingKey, setDraggingKey] = useState<string | null>(null);
   const dragStartPos = useRef<{ x: number; y: number; iconLeft: number; iconTop: number; key: string } | null>(null);
   const activeDragWrapper = useRef<HTMLDivElement | null>(null);
@@ -69,8 +76,11 @@ export default function PrintPreview() {
   useEffect(() => {
     setCustomLines(occurrences);
     manualPositionsRef.current.clear();
+    removedIconsRef.current.clear();
     setManualPositionsVersion((version) => version + 1);
+    setRemovedIconsVersion((version) => version + 1);
     setAutoLayoutTick((tick) => tick + 1);
+    setLastActiveIconKey(null);
   }, [occurrences]);
 
   const warning = useMemo(() => {
@@ -80,6 +90,42 @@ export default function PrintPreview() {
   }, [query.data]);
 
   const manualPositionCount = manualPositionsRef.current.size;
+  const removedIconCount = removedIconsRef.current.size;
+
+  useEffect(() => {
+    let updatedRemovedIcons = false;
+    let lastRestoredKey: string | null = null;
+    const activeKeys = new Set<string>();
+
+    customLines.forEach((item, index) => {
+      const key = buildIconKey(item, index);
+      const normalizedCurrent = item.icon_path ?? REMOVED_ICON_NO_PATH;
+      if (item.icon_path) {
+        activeKeys.add(key);
+      }
+      const stored = removedIconsRef.current.get(key);
+      if (stored !== undefined && stored !== normalizedCurrent && item.icon_path) {
+        removedIconsRef.current.delete(key);
+        updatedRemovedIcons = true;
+        lastRestoredKey = key;
+      }
+    });
+
+    removedIconsRef.current.forEach((_, key) => {
+      if (!activeKeys.has(key)) {
+        removedIconsRef.current.delete(key);
+        updatedRemovedIcons = true;
+      }
+    });
+
+    if (updatedRemovedIcons) {
+      if (lastRestoredKey) {
+        setLastActiveIconKey(lastRestoredKey);
+      }
+      setRemovedIconsVersion((version) => version + 1);
+      setAutoLayoutTick((tick) => tick + 1);
+    }
+  }, [customLines]);
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
@@ -186,18 +232,19 @@ export default function PrintPreview() {
     };
   }, [customLines, filters.font_size, settings.fontFamily, settings.lineGap]);
 
-  const handleIconMouseDown = (event: React.MouseEvent<HTMLImageElement>, index: number) => {
+  const handleIconMouseDown = (event: React.MouseEvent<HTMLImageElement>, iconKey: string) => {
     event.preventDefault();
     event.stopPropagation();
     const img = event.currentTarget;
     const wrapper = img.closest<HTMLDivElement>(".print-line-image");
     if (!wrapper || !editorRef.current) return;
 
-    const key = wrapper.dataset.iconKey ?? `icon-${index}`;
-    wrapper.dataset.iconKey = key;
+    wrapper.dataset.iconKey = iconKey;
+
+    setLastActiveIconKey(iconKey);
 
     const editorRect = editorRef.current.getBoundingClientRect();
-    const savedPosition = manualPositionsRef.current.get(key);
+    const savedPosition = manualPositionsRef.current.get(iconKey);
     const wrapperRect = wrapper.getBoundingClientRect();
 
     const currentLeft = savedPosition?.left ?? wrapperRect.left - editorRect.left;
@@ -215,12 +262,12 @@ export default function PrintPreview() {
       y: event.clientY,
       iconLeft: currentLeft,
       iconTop: currentTop,
-      key,
+      key: iconKey,
     };
-    latestDragPosition.current = { key, left: currentLeft, top: currentTop };
+    latestDragPosition.current = { key: iconKey, left: currentLeft, top: currentTop };
 
     document.body.style.cursor = "grabbing";
-    setDraggingKey(key);
+    setDraggingKey(iconKey);
 
     const handleMouseMove = (e: MouseEvent) => {
       if (!dragStartPos.current || !activeDragWrapper.current) return;
@@ -234,7 +281,7 @@ export default function PrintPreview() {
       activeDragWrapper.current.style.left = `${newLeft}px`;
       activeDragWrapper.current.style.top = `${newTop}px`;
 
-      latestDragPosition.current = { key, left: newLeft, top: newTop };
+      latestDragPosition.current = { key: iconKey, left: newLeft, top: newTop };
     };
 
     const handleMouseUp = () => {
@@ -244,9 +291,9 @@ export default function PrintPreview() {
 
       setDraggingKey(null);
 
-      if (latestDragPosition.current && latestDragPosition.current.key === key) {
+      if (latestDragPosition.current && latestDragPosition.current.key === iconKey) {
         const { left, top } = latestDragPosition.current;
-        manualPositionsRef.current.set(key, { left, top });
+        manualPositionsRef.current.set(iconKey, { left, top });
         setManualPositionsVersion((version) => version + 1);
       }
 
@@ -271,6 +318,54 @@ export default function PrintPreview() {
         wrapper.style.marginLeft = "";
       });
     }
+    setLastActiveIconKey(null);
+    setManualPositionsVersion((version) => version + 1);
+    setAutoLayoutTick((tick) => tick + 1);
+  };
+
+  const handleRemoveIcon = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    key: string,
+    iconPath?: string | null
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    removedIconsRef.current.set(key, iconPath ?? REMOVED_ICON_NO_PATH);
+
+    if (draggingKey === key) {
+      setDraggingKey(null);
+      dragStartPos.current = null;
+      activeDragWrapper.current = null;
+      latestDragPosition.current = null;
+      document.body.style.removeProperty("cursor");
+    }
+
+    if (lastActiveIconKey === key) {
+      setLastActiveIconKey(null);
+    }
+
+    setRemovedIconsVersion((version) => version + 1);
+    setManualPositionsVersion((version) => version + 1);
+    setAutoLayoutTick((tick) => tick + 1);
+  };
+
+  const handleRestoreIcon = (event: React.MouseEvent<HTMLButtonElement>, key: string) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!removedIconsRef.current.has(key)) return;
+
+    removedIconsRef.current.delete(key);
+    setLastActiveIconKey(key);
+    setRemovedIconsVersion((version) => version + 1);
+    setManualPositionsVersion((version) => version + 1);
+    setAutoLayoutTick((tick) => tick + 1);
+  };
+
+  const handleRestoreAllIcons = () => {
+    if (!removedIconsRef.current.size) return;
+    removedIconsRef.current.clear();
+    setLastActiveIconKey(null);
+    setRemovedIconsVersion((version) => version + 1);
     setManualPositionsVersion((version) => version + 1);
     setAutoLayoutTick((tick) => tick + 1);
   };
@@ -334,7 +429,7 @@ export default function PrintPreview() {
 
     const editorRect = editor.getBoundingClientRect();
     applyManualIconStyles(editor, icons, editorRect);
-  }, [manualPositionsVersion]);
+  }, [manualPositionsVersion, removedIconsVersion]);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -516,12 +611,22 @@ export default function PrintPreview() {
             Reset Icon Positions ({manualPositionCount})
           </button>
         )}
+        {removedIconCount > 0 && (
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={handleRestoreAllIcons}
+            title="Restore all icons that were removed from this preview"
+          >
+            Restore All Icons ({removedIconCount})
+          </button>
+        )}
       </section>
 
       {warning && <div className="warning no-print">{warning}</div>}
 
       <div className="no-print" style={{ textAlign: 'center', padding: '0.75rem', background: '#f0f9ff', borderRadius: '0.5rem', color: '#0369a1', fontWeight: 500, fontSize: '0.875rem', marginBottom: '1rem' }}>
-        💡 Tip: You can drag and drop icons to reposition them manually.
+        💡 Tip: Drag icons to reposition them or remove them from this printout.
       </div>
 
       {query.isLoading && <p>Loading...</p>}
@@ -542,28 +647,59 @@ export default function PrintPreview() {
           onInput={handleEditorInput}
         >
           {customLines.map((item, index) => {
-            const iconKey = `icon-${index}`;
+            const iconKey = buildIconKey(item, index);
             const isDragging = draggingKey === iconKey;
+            const isRemoved = removedIconsRef.current.has(iconKey);
+            const showRemoveButton = !isRemoved && iconKey === lastActiveIconKey;
 
             return (
               <div key={`${item.task_id}-${index}`} className="print-line">
                 <span className="print-line-text">{item.title}</span>
-                <div className="print-line-image" style={{ "--icon-offset": "0px" } as CSSProperties} data-icon-key={iconKey}>
-                  {item.icon_path && (
-                    <img
-                      src={item.icon_path}
-                      alt="Task icon"
-                      data-width={item.icon_width ?? 150}
-                      data-height={item.icon_height ?? 150}
-                      draggable={false}
-                      style={{
-                        width: item.icon_width ?? 150,
-                        height: "auto",
-                        cursor: isDragging ? "grabbing" : "grab",
-                      }}
-                      onMouseDown={(e) => handleIconMouseDown(e, index)}
-                      className={isDragging ? "dragging" : ""}
-                    />
+                <div
+                  className="print-line-image"
+                  style={{
+                    "--icon-offset": "0px",
+                    "--icon-width": `${item.icon_width ?? 150}px`,
+                  } as CSSProperties}
+                  data-icon-key={iconKey}
+                >
+                  {item.icon_path && !isRemoved && (
+                    <>
+                      {showRemoveButton && (
+                        <button
+                          type="button"
+                          className="print-icon-remove-button no-print"
+                          title="Remove this icon from the current print preview"
+                          onClick={(event) => handleRemoveIcon(event, iconKey, item.icon_path)}
+                        >
+                          <span aria-hidden="true">×</span>
+                          <span className="visually-hidden">Remove icon</span>
+                        </button>
+                      )}
+                      <img
+                        src={item.icon_path}
+                        alt="Task icon"
+                        data-width={item.icon_width ?? 150}
+                        data-height={item.icon_height ?? 150}
+                        draggable={false}
+                        style={{
+                          width: item.icon_width ?? 150,
+                          height: "auto",
+                          cursor: isDragging ? "grabbing" : "grab",
+                        }}
+                        onMouseDown={(e) => handleIconMouseDown(e, iconKey)}
+                        className={isDragging ? "dragging" : ""}
+                      />
+                    </>
+                  )}
+                  {item.icon_path && isRemoved && (
+                    <button
+                      type="button"
+                      className="print-icon-restore-button no-print"
+                      onClick={(event) => handleRestoreIcon(event, iconKey)}
+                    >
+                      Restore icon
+                    </button>
                   )}
                 </div>
               </div>
