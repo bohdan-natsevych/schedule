@@ -16,16 +16,14 @@ def open_browser(port: int) -> None:
     webbrowser.open(f"http://localhost:{port}")
 
 
-def find_available_port(start_port: int = 8000, max_attempts: int = 10) -> int:
-    """Return first available port in range starting at start_port."""
-    for port in range(start_port, start_port + max_attempts):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            try:
-                sock.bind(("127.0.0.1", port))
-            except OSError:
-                continue
-            return port
-    return start_port
+def check_port_available(port: int = 8000) -> bool:
+    """CURSOR: Check if specific port is available. Returns True if available."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        try:
+            sock.bind(("127.0.0.1", port))
+            return True
+        except OSError:
+            return False
 
 
 def get_base_path():
@@ -95,7 +93,23 @@ def main():
                 return FileResponse(str(file_path))
             return FileResponse(str(frontend_dist / "index.html"))
     
-    port = find_available_port()
+    # CURSOR: Use fixed port 8000 for Google OAuth compatibility
+    port = 8000
+    
+    # CURSOR: Check if port is available
+    if not check_port_available(port):
+        print("=" * 50)
+        print("ERROR: Port 8000 is already in use!")
+        print("=" * 50)
+        print(f"Schedule Manager requires port {port} to be available for Google Calendar integration.")
+        print("Please close any application using this port and try again.")
+        print("\nCommon causes:")
+        print("- Another instance of Schedule Manager is running")
+        print("- Another web server is using port 8000")
+        print("\nPress Enter to exit...")
+        print("=" * 50)
+        input()
+        sys.exit(1)
 
     # Open browser after 1.5 seconds
     Timer(1.5, open_browser, args=(port,)).start()

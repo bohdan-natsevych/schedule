@@ -3,6 +3,7 @@ Google Calendar integration service.
 Handles OAuth2 authentication and importing events from Google Calendar.
 """
 import os
+import sys
 import pickle
 from datetime import datetime, date, time, timedelta
 from pathlib import Path
@@ -14,14 +15,25 @@ from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
+
+def get_base_path() -> Path:
+    """CURSOR: Get base path for credentials - handles both dev and installed modes"""
+    if getattr(sys, 'frozen', False):
+        # CURSOR: Running as installed executable - use installation directory
+        return Path(sys.executable).parent
+    else:
+        # CURSOR: Running in development - go up to project root
+        return Path(__file__).resolve().parents[3]
+
+
 # OAuth2 configuration
 SCOPES = [
     'https://www.googleapis.com/auth/calendar.readonly',
     'https://www.googleapis.com/auth/calendar.events'
 ]
-# Go up 3 levels: google_calendar.py -> services -> app -> backend -> project root
-TOKEN_PATH = Path(__file__).resolve().parents[3] / "google_token.pickle"
-CREDENTIALS_PATH = Path(__file__).resolve().parents[3] / "google_credentials.json"
+
+TOKEN_PATH = get_base_path() / "google_token.pickle"
+CREDENTIALS_PATH = get_base_path() / "google_credentials.json"
 
 # Redirect URI for OAuth2
 REDIRECT_URI = "http://localhost:8000/google-calendar/oauth2callback"

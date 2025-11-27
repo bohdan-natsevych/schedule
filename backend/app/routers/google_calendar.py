@@ -4,7 +4,7 @@ Handles OAuth2 flow and importing events from Google Calendar.
 """
 from typing import List, Optional
 from datetime import datetime, date, time
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -94,7 +94,7 @@ def get_auth_url():
 
 
 @router.get("/oauth2callback")
-def oauth2_callback(code: str = Query(...), state: Optional[str] = None):
+def oauth2_callback(request: Request, code: str = Query(...), state: Optional[str] = None):
     """
     OAuth2 callback endpoint.
     Google redirects here after user authorizes the app.
@@ -102,11 +102,13 @@ def oauth2_callback(code: str = Query(...), state: Optional[str] = None):
     service = get_google_calendar_service()
     success = service.exchange_code_for_token(code)
     
+    # CURSOR: Get base URL from request to redirect to correct port (dev or production)
+    base_url = f"{request.url.scheme}://{request.url.netloc}"
+    
     if success:
-        # Redirect back to the frontend with success message
-        return RedirectResponse(url="http://localhost:5173/?google_auth=success")
+        return RedirectResponse(url=f"{base_url}/?google_auth=success")
     else:
-        return RedirectResponse(url="http://localhost:5173/?google_auth=failed")
+        return RedirectResponse(url=f"{base_url}/?google_auth=failed")
 
 
 @router.post("/disconnect", response_model=AuthStatusResponse)
