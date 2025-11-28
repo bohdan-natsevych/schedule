@@ -84,8 +84,6 @@ The application supports importing events from Google Calendar. This feature req
 2. Follow the [Google Calendar Setup Guide](docs/GOOGLE_CALENDAR_SETUP.md) to create your own OAuth credentials
 3. Replace the placeholder values in `google_credentials.json` with your actual credentials
 
-> **Note**: Never commit `google_credentials.json` to version control. It contains sensitive OAuth secrets.
-
 ## Documentation
 
 - [User Guide](docs/USER_GUIDE.md) - How to use the application.
