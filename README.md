@@ -1,189 +1,122 @@
 # Schedule Manager
 
-A desktop application for managing recurring tasks with a calendar interface and print preview functionality.
+## History
 
-## Features
+This project was born out of a personal need to support my daughter, who lives with an intellectual disability. For her, understanding the abstract concept of time passage is challenging. We discovered that a visual, linear representation of her day - a large list of events paired with images that she can physically cross out as they are completed - provides her with a clear and tangible sense of progress and structure.
 
-- 📅 **Calendar View**: Visual monthly calendar with all your tasks
-- 📋 **Agenda View**: List of upcoming tasks for the next year
-- 🔄 **Recurring Tasks**: Support for daily, weekly, monthly, and yearly tasks
-- 🖼️ **Task Icons**: Upload and customize icons for tasks
-- 🖨️ **Print Preview**: Preview and print your schedule with customizable formatting
-- 💾 **Local Storage**: All data stored locally on your computer
+## Main Idea
 
-## For Users
+The main purpose of this application is to generate a visual schedule that helps users track daily events. It allows creating a printable list of events with associated images, making it easier to visualize the flow of the day and "cross out" completed activities.
+![Screenshot](docs/img/image-20251128102555632.png)
 
-### Quick Start
+## Quick Start
 
-1. **Download** the latest `ScheduleManagerSetup.exe` from the releases page
-2. **Run** the installer
-3. **Launch** Schedule Manager from your Start Menu or Desktop shortcut
-4. The application opens automatically in your web browser
+### Prerequisites
 
-### Documentation
+- Python 3.11 or higher
+- Node.js and npm (for building the frontend)
 
-- [User Guide](USER_GUIDE.md) - Complete guide on how to use the application
-- [Troubleshooting](USER_GUIDE.md#troubleshooting) - Solutions to common issues
+### Development
 
-### System Requirements
+The easiest way to run the application in development mode is using the provided script:
 
-- **OS**: Windows 10 or higher
-- **RAM**: 2GB minimum
-- **Disk Space**: 200MB
-- **Browser**: Any modern web browser (Chrome, Firefox, Edge, etc.)
-
-## For Developers
-
-### Build from Source
-
-Want to build the application yourself or contribute to development?
-
-1. **Clone** the repository:
-   ```bash
-   git clone https://github.com/yourusername/schedule.git
-   cd schedule
+1. Clone the repository
+2. Run the development script:
+   ```batch
+   dev.bat
    ```
 
-2. **Build** the application:
+This script will automatically:
+- Create a Python virtual environment
+- Install backend dependencies
+- Install frontend dependencies
+- Start both backend and frontend servers in development mode
+
+### Manual Installation
+
+If you prefer to set up the environment manually:
+
+1. **Backend Setup**:
    ```bash
-   build.bat
+   # Create virtual environment
+   python -m venv venv
+   
+   # Activate virtual environment
+   # Windows:
+   .\venv\Scripts\activate
+   # Linux/Mac:
+   source venv/bin/activate
+   
+   # Install dependencies
+   cd backend
+   pip install -r requirements.txt
    ```
 
-See [BUILD.md](BUILD.md) for detailed build instructions.
+2. **Frontend Setup**:
+   ```bash
+   cd frontend/client
+   npm install
+   npm run build
+   ```
 
-### Development Setup
+3. **Running the Application**:
+   ```bash
+   # From the root directory (with venv activated)
+   python launcher.py
+   ```
 
-#### Backend (Python/FastAPI)
+## Tools & Scripts
 
-```bash
-cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
+The project includes several utility scripts to help with development, building, and maintenance:
 
-Backend runs on: `http://localhost:8000`
+- **`dev.bat` / `dev.ps1`**: 
+  Development starter script. Automatically sets up the Python virtual environment, installs backend and frontend dependencies, and launches both servers in development mode with hot-reloading.
+- **`build.bat`**: 
+  Build automation script for Windows. It installs dependencies, builds the frontend assets, compiles the application into a standalone executable using PyInstaller, and (optionally) generates an installer using Inno Setup.
+- **`launcher.py`**: 
+  The main application entry point. It handles environment setup (database paths, asset locations) and launches the backend server while serving the frontend. It works both when running from source and as a compiled executable.
 
-#### Frontend (React/TypeScript)
+## Google Calendar Integration (Optional)
 
-```bash
-cd frontend/client
-npm install
-npm run dev
-```
+The application supports importing events from Google Calendar. This feature requires you to set up your own Google Cloud credentials:
 
-Frontend runs on: `http://localhost:5173`
+1. Copy `google_credentials.example.json` to `google_credentials.json`
+2. Follow the [Google Calendar Setup Guide](docs/GOOGLE_CALENDAR_SETUP.md) to create your own OAuth credentials
+3. Replace the placeholder values in `google_credentials.json` with your actual credentials
 
-### Project Structure
+> **Note**: Never commit `google_credentials.json` to version control. It contains sensitive OAuth secrets.
 
-```
-schedule/
-├── backend/              # FastAPI backend
-│   ├── app/
-│   │   ├── crud/        # Database operations
-│   │   ├── models/      # SQLAlchemy models
-│   │   ├── routers/     # API endpoints
-│   │   ├── schemas/     # Pydantic schemas
-│   │   └── utils/       # Utility functions
-│   └── requirements.txt
-├── frontend/
-│   └── client/          # React frontend
-│       ├── src/
-│       │   ├── api/     # API client
-│       │   ├── components/  # React components
-│       │   ├── pages/   # Page components
-│       │   └── types/   # TypeScript types
-│       └── package.json
-├── launcher.py          # Application launcher
-├── schedule-manager.spec  # PyInstaller config
-├── installer.iss        # Inno Setup config
-└── build.bat           # Build script
+## Documentation
 
-```
-
-### Technologies Used
-
-**Backend:**
-- FastAPI - Modern Python web framework
-- SQLAlchemy - SQL toolkit and ORM
-- SQLite - Lightweight database
-- Uvicorn - ASGI server
-
-**Frontend:**
-- React 19 - UI library
-- TypeScript - Type-safe JavaScript
-- Vite - Build tool
-- React Big Calendar - Calendar component
-- TanStack Query - Data fetching
-- Axios - HTTP client
-- date-fns - Date utilities
-
-**Packaging:**
-- PyInstaller - Python to executable
-- Inno Setup - Windows installer creator
-
-### Building the Installer
-
-See [BUILD.md](BUILD.md) for comprehensive build instructions.
-
-Quick build:
-```bash
-build.bat
-```
-
-Output:
-- `dist/ScheduleManager/ScheduleManager.exe` - Standalone application
-- `Output/ScheduleManagerSetup.exe` - Windows installer
-
-### Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-### Testing
-
-#### Backend Tests
-```bash
-cd backend
-pytest
-```
-
-#### Frontend Tests
-```bash
-cd frontend/client
-npm test
-```
+- [User Guide](docs/USER_GUIDE.md) - How to use the application.
+- [Build Instructions](docs/BUILD.md) - How to build the application from source.
+- [Google Calendar Setup](docs/GOOGLE_CALENDAR_SETUP.md) - Configuring Google Calendar integration.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+MIT License
 
-## Support
+Copyright (c) 2024
 
-- **Issues**: Report bugs or request features on [GitHub Issues](https://github.com/yourusername/schedule/issues)
-- **Documentation**: See [User Guide](USER_GUIDE.md) for detailed usage instructions
-- **Build Help**: See [BUILD.md](BUILD.md) for build troubleshooting
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-## Changelog
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-### Version 1.0.0
-- Initial release
-- Calendar and Agenda views
-- Recurring task support
-- Task icons with custom sizing
-- Print preview with page count
-- Windows installer
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
-## Acknowledgments
+## Note
 
-- React Big Calendar for the calendar component
-- FastAPI for the excellent Python web framework
-- All open-source contributors
+This project was vibe-coded.
 
----
-
-Made with ❤️ by Schedule Manager Team

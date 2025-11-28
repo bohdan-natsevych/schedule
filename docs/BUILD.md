@@ -104,10 +104,6 @@ Share `Output\ScheduleManagerSetup.exe`. Users run it to install the application
 - Look for error messages in the console window
 - Ensure `backend/schedule.db` and `uploads` folders exist
 
-### Database Issues
-- The application creates `schedule.db` automatically on first run
-- To reset the database, delete `backend/schedule.db`
-
 ## Development vs Production
 
 The application automatically detects its environment:
@@ -143,3 +139,5 @@ dist/ScheduleManager/
 - To stop the application, close the console window
 - Database and uploads are stored in the application directory
 - First run may take a few seconds to initialize the database
+
+

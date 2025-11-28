@@ -33,7 +33,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "dist\ScheduleManager\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "google_credentials.json"; DestDir: "{app}"; Flags: ignoreversion
+; CURSOR: Only include google_credentials.json if it exists (users must provide their own)
+Source: "google_credentials.json"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

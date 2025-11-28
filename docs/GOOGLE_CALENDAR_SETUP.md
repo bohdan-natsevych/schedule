@@ -47,10 +47,7 @@ This guide will help you set up Google Calendar integration to import events int
 
 ### 4. Install the Credentials File
 
-1. Place `google_credentials.json` in the **root directory** of your Schedule Manager project:
-   ```
-   C:\Work\personal\schedule\google_credentials.json
-   ```
+1. Place `google_credentials.json` in the **root directory** of your Schedule Manager project (same directory as `launcher.py`)
 
 ### 5. Install Python Dependencies
 
@@ -103,7 +100,7 @@ py -c "from app.database import Base, engine; Base.metadata.create_all(bind=engi
 9. Click "Import X Events"
 10. Events will be created as tasks in your schedule!
 
-### Event Import Details
+## Event Import Details
 
 - **Single events**: Imported as one-time tasks with correct date and time
 - **All-day events**: Imported with default 9:00 AM time
@@ -128,12 +125,6 @@ py -c "from app.database import Base, engine; Base.metadata.create_all(bind=engi
 
 - Check that your selected calendar has events in the date range (past 30 days to future 365 days)
 - Verify calendar permissions in Google Calendar settings
-
-### OAuth Screen Issues
-
-- If using "External" user type, your app will be in testing mode
-- Add your Google account as a test user in the OAuth consent screen
-- You may see a warning screen - click "Advanced" → "Go to Schedule Manager (unsafe)" to proceed
 
 ## Security Notes
 
@@ -160,3 +151,5 @@ If you encounter issues:
 2. Verify all setup steps were completed
 3. Review Google Cloud Console settings
 4. Check browser console for frontend errors
+
+

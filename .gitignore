@@ -12,6 +12,7 @@ env/
 # Database
 backend/schedule.db
 *.db
+*.db.backup
 
 # Uploads
 uploads/
@@ -42,3 +43,11 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Sensitive files - NEVER commit these!
+google_credentials.json
+google_token.pickle
+*.pickle
+.env
+.env.*
+!.env.example
