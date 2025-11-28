@@ -7,6 +7,7 @@ This project was born out of a personal need to support my daughter, who lives w
 ## Main Idea
 
 The main purpose of this application is to generate a visual schedule that helps users track daily events. It allows creating a printable list of events with associated images, making it easier to visualize the flow of the day and "cross out" completed activities.
+![Screenshot](docs/img/2025-11-28_11-12-48.png)
 ![Screenshot](docs/img/image-20251128102555632.png)
 
 ## Quick Start
