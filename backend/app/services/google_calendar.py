@@ -16,6 +16,8 @@ from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
+from app.services import legacy_install
+
 
 def get_base_path() -> Path:
     """CURSOR: Get base path for credentials - handles both dev and installed modes"""
@@ -31,23 +33,41 @@ def get_data_path() -> Path:
     """CLAUDE CODE: Where the sign-in is kept. An in-app update reinstalls the
     program directory, so anything stored there is lost on every update; this
     sits beside the database instead, which no install ever touches."""
+    configured = os.environ.get('APP_DATA_PATH')
+    if configured:
+        return Path(configured)
     if getattr(sys, 'frozen', False):
         local_app_data = os.environ.get('LOCALAPPDATA')
         if local_app_data:
-            return Path(local_app_data) / "Schedule Manager"
+            return Path(local_app_data) / "ScheduleManager"
         return Path.home() / ".schedule-manager"
     return Path(__file__).resolve().parents[3]
 
 
-def adopt_from_install_dir(name: str) -> Path:
+def legacy_credential_dirs() -> List[Path]:
+    """Places an earlier install may have left credentials in. The per-machine
+    install kept them next to its executable, which this process may read but,
+    running unelevated, cannot write to or clean up."""
+    candidates = [get_base_path()]
+    previous_install = legacy_install.install_location()
+    if previous_install:
+        candidates.append(previous_install)
+    return candidates
+
+
+def adopt_legacy_credentials(name: str) -> Path:
     """CLAUDE CODE: Return the data-directory path for a credential file, taking
-    over a copy left in the program directory by an older install first."""
+    over a copy left behind by an older install first."""
     data_path = get_data_path() / name
-    if not data_path.exists():
-        legacy = get_base_path() / name
-        if legacy.exists() and legacy != data_path:
+    if data_path.exists():
+        return data_path
+
+    for directory in legacy_credential_dirs():
+        source = directory / name
+        if source.exists() and source != data_path:
             data_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(legacy, data_path)
+            shutil.copy2(source, data_path)
+            break
     return data_path
 
 
@@ -57,8 +77,8 @@ SCOPES = [
     'https://www.googleapis.com/auth/calendar.events'
 ]
 
-TOKEN_PATH = adopt_from_install_dir("google_token.pickle")
-CREDENTIALS_PATH = adopt_from_install_dir("google_credentials.json")
+TOKEN_PATH = adopt_legacy_credentials("google_token.pickle")
+CREDENTIALS_PATH = adopt_legacy_credentials("google_credentials.json")
 
 # Redirect URI for OAuth2
 REDIRECT_URI = "http://localhost:8000/google-calendar/oauth2callback"

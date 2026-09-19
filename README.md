@@ -18,7 +18,7 @@ and run it. It installs for the current user only, into
 `%LOCALAPPDATA%\Programs\ScheduleManager`, and needs no administrator rights.
 
 Your schedule, uploaded images and Google sign-in live in
-`%LOCALAPPDATA%\Schedule Manager` and are never touched by an install, an
+`%LOCALAPPDATA%\ScheduleManager` and are never touched by an install, an
 update or an uninstall.
 
 ### Updating
@@ -27,6 +27,21 @@ Every push to `master` publishes a new release, so the installer only has to be
 downloaded by hand once. After that, use **Check for updates** in the top-right
 corner of the application: it downloads the newest installer, installs it
 silently, and restarts the application.
+
+### Coming from a version installed before 1.0.2
+
+Versions up to 1.0.1 installed per machine into `Program Files` and kept their
+data in `%LOCALAPPDATA%\Schedule Manager`, a folder their uninstaller deletes.
+The first start of a newer version moves that folder to
+`%LOCALAPPDATA%\ScheduleManager` and copies any Google credentials out of the
+old program directory, so nothing of the user's is left where the old
+uninstaller can reach it.
+
+A **Remove old version** button then appears next to **Check for updates**. It
+runs the old uninstaller, which asks for administrator rights because that
+install was per machine. It refuses to run while anything is still in the old
+data folder, so a migration that did not complete cannot take the schedule with
+it.
 
 ### Releasing
 
@@ -115,7 +130,7 @@ The application supports importing events from Google Calendar. This feature req
 2. Follow the [Google Calendar Setup Guide](docs/GOOGLE_CALENDAR_SETUP.md) to create your own OAuth credentials
 3. Replace the placeholder values in `google_credentials.json` with your actual credentials
 
-In an installed copy the file belongs in `%LOCALAPPDATA%\Schedule Manager\`,
+In an installed copy the file belongs in `%LOCALAPPDATA%\ScheduleManager\`,
 next to the database, so that updates leave it and the saved sign-in alone. A
 `google_credentials.json` found in the program directory on startup is copied
 there once, which is what happens to installs made before that folder was used.

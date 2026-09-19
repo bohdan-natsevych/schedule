@@ -1,9 +1,17 @@
 import { api } from "./client";
 
+export interface LegacyInstall {
+  present: boolean;
+  safe_to_remove: boolean;
+  version?: string;
+  location?: string;
+}
+
 export interface UpdateStatus {
   installed_version: string;
   can_install: boolean;
   releases_url: string;
+  legacy_install: LegacyInstall;
 }
 
 export interface UpdateCheck {
@@ -26,4 +34,8 @@ export const checkForUpdate = async (): Promise<UpdateCheck> => {
 
 export const installUpdate = async (): Promise<void> => {
   await api.post("/update/install");
+};
+
+export const removeLegacyInstall = async (): Promise<void> => {
+  await api.post("/update/remove-legacy");
 };

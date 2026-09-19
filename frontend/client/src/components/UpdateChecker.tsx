@@ -5,12 +5,16 @@ import {
   checkForUpdate,
   fetchUpdateStatus,
   installUpdate,
+  removeLegacyInstall,
   type UpdateStatus,
 } from "../api/update";
 
 type Phase = "idle" | "checking" | "current" | "available" | "installing" | "error";
+type LegacyPhase = "idle" | "removing" | "removed" | "error";
 
 const RELAUNCH_POLL_MS = 2000;
+const LEGACY_POLL_MS = 2000;
+const LEGACY_POLL_LIMIT = 30;
 
 const describe = (error: unknown) => {
   if (axios.isAxiosError(error)) {
@@ -25,7 +29,10 @@ export default function UpdateChecker() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [legacyPhase, setLegacyPhase] = useState<LegacyPhase>("idle");
+  const [legacyMessage, setLegacyMessage] = useState<string | null>(null);
   const pollRef = useRef<number | undefined>(undefined);
+  const legacyPollRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     fetchUpdateStatus()
@@ -33,10 +40,13 @@ export default function UpdateChecker() {
       .catch(() => setStatus(null));
     return () => {
       if (pollRef.current) window.clearInterval(pollRef.current);
+      if (legacyPollRef.current) window.clearInterval(legacyPollRef.current);
     };
   }, []);
 
   if (!status) return null;
+
+  const legacy = status.legacy_install;
 
   const handleCheck = async () => {
     setPhase("checking");
@@ -82,6 +92,42 @@ export default function UpdateChecker() {
     }, RELAUNCH_POLL_MS);
   };
 
+  const handleRemoveLegacy = async () => {
+    setLegacyPhase("removing");
+    setLegacyMessage("Waiting for Windows to confirm the removal...");
+    try {
+      await removeLegacyInstall();
+    } catch (error) {
+      setLegacyPhase("error");
+      setLegacyMessage(describe(error));
+      return;
+    }
+
+    // CLAUDE CODE: the uninstaller is detached and reports nothing back, so the
+    // registry entry disappearing is what says it finished.
+    let attempts = 0;
+    legacyPollRef.current = window.setInterval(async () => {
+      attempts += 1;
+      try {
+        const next = await fetchUpdateStatus();
+        if (!next.legacy_install.present) {
+          window.clearInterval(legacyPollRef.current);
+          setStatus(next);
+          setLegacyPhase("removed");
+          setLegacyMessage("The old version has been removed.");
+          return;
+        }
+      } catch {
+        // Ignore and retry.
+      }
+      if (attempts >= LEGACY_POLL_LIMIT) {
+        window.clearInterval(legacyPollRef.current);
+        setLegacyPhase("error");
+        setLegacyMessage("The old version is still listed. Check Apps & Features.");
+      }
+    }, LEGACY_POLL_MS);
+  };
+
   return (
     <div className="update-checker no-print">
       <span className="update-checker-version">v{status.installed_version}</span>
@@ -116,12 +162,39 @@ export default function UpdateChecker() {
         </button>
       )}
 
+      {legacy.present && legacyPhase !== "removed" && (
+        <button
+          type="button"
+          className="update-checker-button is-legacy"
+          onClick={handleRemoveLegacy}
+          disabled={legacyPhase === "removing" || !legacy.safe_to_remove}
+          title={
+            legacy.safe_to_remove
+              ? `Uninstall the older copy in ${legacy.location}. Windows will ask for permission.`
+              : "The previous data folder is not empty yet; restart the app first."
+          }
+        >
+          {legacyPhase === "removing"
+            ? "Removing..."
+            : `Remove old version${legacy.version ? ` (v${legacy.version})` : ""}`}
+        </button>
+      )}
+
       {message && (
         <span
           className={`update-checker-message${phase === "error" ? " is-error" : ""}`}
           role="status"
         >
           {message}
+        </span>
+      )}
+
+      {legacyMessage && (
+        <span
+          className={`update-checker-message${legacyPhase === "error" ? " is-error" : ""}`}
+          role="status"
+        >
+          {legacyMessage}
         </span>
       )}
     </div>
