@@ -1,5 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 
+import UpdateChecker from "./UpdateChecker";
+
 export default function Header() {
   const location = useLocation();
 
@@ -17,7 +19,7 @@ export default function Header() {
       <h1 style={{ margin: 0, fontSize: "1.5rem", fontWeight: 700 }}>
         Schedule Planner
       </h1>
-      <nav style={{ display: "flex", gap: "1rem" }}>
+      <nav style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
         <Link
           to="/"
           style={{
@@ -34,6 +36,7 @@ export default function Header() {
         >
           Print Preview
         </Link>
+        <UpdateChecker />
       </nav>
     </header>
   );

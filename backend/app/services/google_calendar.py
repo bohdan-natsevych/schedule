@@ -3,6 +3,7 @@ Google Calendar integration service.
 Handles OAuth2 authentication and importing events from Google Calendar.
 """
 import os
+import shutil
 import sys
 import pickle
 from datetime import datetime, date, time, timedelta
@@ -26,14 +27,38 @@ def get_base_path() -> Path:
         return Path(__file__).resolve().parents[3]
 
 
+def get_data_path() -> Path:
+    """CLAUDE CODE: Where the sign-in is kept. An in-app update reinstalls the
+    program directory, so anything stored there is lost on every update; this
+    sits beside the database instead, which no install ever touches."""
+    if getattr(sys, 'frozen', False):
+        local_app_data = os.environ.get('LOCALAPPDATA')
+        if local_app_data:
+            return Path(local_app_data) / "Schedule Manager"
+        return Path.home() / ".schedule-manager"
+    return Path(__file__).resolve().parents[3]
+
+
+def adopt_from_install_dir(name: str) -> Path:
+    """CLAUDE CODE: Return the data-directory path for a credential file, taking
+    over a copy left in the program directory by an older install first."""
+    data_path = get_data_path() / name
+    if not data_path.exists():
+        legacy = get_base_path() / name
+        if legacy.exists() and legacy != data_path:
+            data_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(legacy, data_path)
+    return data_path
+
+
 # OAuth2 configuration
 SCOPES = [
     'https://www.googleapis.com/auth/calendar.readonly',
     'https://www.googleapis.com/auth/calendar.events'
 ]
 
-TOKEN_PATH = get_base_path() / "google_token.pickle"
-CREDENTIALS_PATH = get_base_path() / "google_credentials.json"
+TOKEN_PATH = adopt_from_install_dir("google_token.pickle")
+CREDENTIALS_PATH = adopt_from_install_dir("google_credentials.json")
 
 # Redirect URI for OAuth2
 REDIRECT_URI = "http://localhost:8000/google-calendar/oauth2callback"
