@@ -1,4 +1,13 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import Header from "../components/Header";
@@ -24,18 +33,33 @@ const defaultTo = sixMonthsFromToday;
 interface EditorSettings {
   lineGap: number;
   fontFamily: string;
+  dayLabelStartPercent: number;
 }
 
 const DEFAULT_SETTINGS: EditorSettings = {
   lineGap: 6,
   fontFamily: "Segoe UI",
+  dayLabelStartPercent: 30,
 };
+
+const DAY_LABEL_START_MIN = 0;
+const DAY_LABEL_START_MAX = 100;
 
 const ICON_HORIZONTAL_GAP = 16;
 const REMOVED_ICON_NO_PATH = "__removed_icon_no_path__";
 
 const buildIconKey = (occurrence: TaskOccurrence, index: number) =>
   `${occurrence.task_id}|${occurrence.date}|${occurrence.start_time ?? `idx-${index}`}`;
+
+const formatDayHeader = (dateStr: string) => {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+};
 
 export default function PrintPreview() {
   useEffect(() => {
@@ -51,6 +75,7 @@ export default function PrintPreview() {
     font_size: 12,
   });
   const [settings, setSettings] = useState<EditorSettings>(DEFAULT_SETTINGS);
+  const [divideByDays, setDivideByDays] = useState(false);
   const [customLines, setCustomLines] = useState<TaskOccurrence[]>([]);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const [pageCount, setPageCount] = useState(1);
@@ -65,6 +90,9 @@ export default function PrintPreview() {
   const dragStartPos = useRef<{ x: number; y: number; iconLeft: number; iconTop: number; key: string } | null>(null);
   const activeDragWrapper = useRef<HTMLDivElement | null>(null);
   const latestDragPosition = useRef<{ key: string; left: number; top: number } | null>(null);
+  const dayLayoutCacheRef = useRef<{ rowWidth: number; labelWidths: Map<string, number> } | null>(
+    null
+  );
 
   const query = useQuery({
     queryKey: ["print", filters],
@@ -88,6 +116,110 @@ export default function PrintPreview() {
     if (!query.data.missing_days.length) return null;
     return `No tasks on: ${query.data.missing_days.join(", ")}`;
   }, [query.data]);
+
+  const dayGroups = useMemo(() => {
+    if (!divideByDays || !customLines.length) return null;
+
+    const groups: Array<{
+      date: string;
+      items: Array<{ item: TaskOccurrence; index: number }>;
+    }> = [];
+
+    customLines.forEach((item, index) => {
+      const lastGroup = groups[groups.length - 1];
+      if (!lastGroup || lastGroup.date !== item.date) {
+        groups.push({ date: item.date, items: [{ item, index }] });
+        return;
+      }
+      lastGroup.items.push({ item, index });
+    });
+
+    return groups;
+  }, [customLines, divideByDays]);
+
+  const rebuildDayLayoutCache = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor || !divideByDays) {
+      dayLayoutCacheRef.current = null;
+      return;
+    }
+
+    const separators = editor.querySelectorAll<HTMLElement>(".print-day-separator");
+    if (!separators.length) {
+      dayLayoutCacheRef.current = null;
+      return;
+    }
+
+    const rowWidth = separators[0].clientWidth;
+    const labelWidths = new Map<string, number>();
+
+    separators.forEach((separator) => {
+      const date = separator.dataset.dayDate;
+      const label = separator.querySelector<HTMLElement>(".print-day-separator-label");
+      if (!date || !label) return;
+      labelWidths.set(date, label.offsetWidth);
+    });
+
+    dayLayoutCacheRef.current = { rowWidth, labelWidths };
+  }, [divideByDays]);
+
+  const applyDaySeparatorOffsets = useCallback((percent: number) => {
+    const editor = editorRef.current;
+    const cache = dayLayoutCacheRef.current;
+    if (!editor || !divideByDays || !cache) return;
+
+    const { rowWidth, labelWidths } = cache;
+    const offsetPx = Math.round((percent / 100) * rowWidth);
+
+    editor.querySelectorAll<HTMLElement>(".print-day-separator").forEach((separator) => {
+      const date = separator.dataset.dayDate;
+      if (!date) return;
+
+      const labelWidth = labelWidths.get(date) ?? 0;
+      const maxOffset = Math.max(0, rowWidth - labelWidth);
+      const clampedOffset = Math.min(offsetPx, maxOffset);
+      const nextValue = `${clampedOffset}px`;
+
+      if (separator.style.getPropertyValue("--day-label-offset") !== nextValue) {
+        separator.style.setProperty("--day-label-offset", nextValue);
+      }
+    });
+  }, [divideByDays]);
+
+  useLayoutEffect(() => {
+    if (!divideByDays) {
+      dayLayoutCacheRef.current = null;
+      return;
+    }
+
+    rebuildDayLayoutCache();
+    applyDaySeparatorOffsets(settings.dayLabelStartPercent);
+    // CURSOR: dayLabelStartPercent is read but not a dep; slider updates offsets directly.
+  }, [divideByDays, dayGroups, filters.font_size, settings.fontFamily, rebuildDayLayoutCache, applyDaySeparatorOffsets]);
+
+  useEffect(() => {
+    if (!divideByDays) return;
+
+    let resizeTimeoutId: number | undefined;
+    const handleResize = () => {
+      if (resizeTimeoutId) window.clearTimeout(resizeTimeoutId);
+      resizeTimeoutId = window.setTimeout(() => {
+        rebuildDayLayoutCache();
+        applyDaySeparatorOffsets(settings.dayLabelStartPercent);
+      }, 150);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      if (resizeTimeoutId) window.clearTimeout(resizeTimeoutId);
+    };
+  }, [
+    divideByDays,
+    settings.dayLabelStartPercent,
+    rebuildDayLayoutCache,
+    applyDaySeparatorOffsets,
+  ]);
 
   const manualPositionCount = manualPositionsRef.current.size;
   const removedIconCount = removedIconsRef.current.size;
@@ -145,26 +277,65 @@ export default function PrintPreview() {
     setSettings((prev) => ({ ...prev, fontFamily: value }));
   };
 
+  const handleDayLabelStartChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = Number(event.target.value);
+    applyDaySeparatorOffsets(value);
+    setSettings((prev) => ({ ...prev, dayLabelStartPercent: value }));
+  };
+
   const handleEditorInput = () => {
     const node = editorRef.current;
     if (!node) return;
 
     const blocks = Array.from(node.querySelectorAll(".print-line"));
-    const updated: TaskOccurrence[] = blocks.map((block, index) => {
+    const lineIndexByKey = new Map(
+      customLines.map((item, index) => [buildIconKey(item, index), index])
+    );
+    const updated: TaskOccurrence[] = [];
+
+    blocks.forEach((block) => {
+      const iconKey = (block as HTMLElement).dataset.iconKey;
+      if (!iconKey) return;
+
+      const baseIndex = lineIndexByKey.get(iconKey);
+      if (baseIndex === undefined) return;
+
+      const base = customLines[baseIndex];
       const textElement = block.querySelector(".print-line-text");
       const img = block.querySelector("img");
-      const base = customLines[index];
 
-      return {
+      updated.push({
         ...base,
-        title: textElement?.textContent ?? base?.title ?? "",
-        icon_width: img ? parseInt(img.getAttribute("data-width") ?? "150", 10) : base?.icon_width,
-        icon_height: img ? parseInt(img.getAttribute("data-height") ?? "150", 10) : base?.icon_height,
-      };
+        title: textElement?.textContent ?? base.title ?? "",
+        icon_width: img ? parseInt(img.getAttribute("data-width") ?? "150", 10) : base.icon_width,
+        icon_height: img ? parseInt(img.getAttribute("data-height") ?? "150", 10) : base.icon_height,
+      });
     });
 
     setCustomLines(updated);
   };
+
+  // CLAUDE CODE: React must not own the line text. Inside a contentEditable, re-rendering a
+  // text child on every keystroke collapses the caret to the start of the line. The spans are
+  // therefore rendered empty and filled here, and only when the DOM text actually differs -
+  // after the user types, state already matches the DOM, so nothing is written and the caret
+  // stays put.
+  useLayoutEffect(() => {
+    const node = editorRef.current;
+    if (!node) return;
+
+    node.querySelectorAll<HTMLElement>(".print-line").forEach((block) => {
+      const index = Number(block.dataset.lineIndex);
+      const line = customLines[index];
+      if (!line) return;
+
+      const textElement = block.querySelector<HTMLElement>(".print-line-text");
+      const title = line.title ?? "";
+      if (textElement && textElement.textContent !== title) {
+        textElement.textContent = title;
+      }
+    });
+  });
 
   useEffect(() => {
     const node = editorRef.current;
@@ -230,7 +401,7 @@ export default function PrintPreview() {
       window.removeEventListener("resize", handleResize);
       cleanupImageListeners.forEach((cleanup) => cleanup());
     };
-  }, [customLines, filters.font_size, settings.fontFamily, settings.lineGap]);
+  }, [customLines, filters.font_size, settings.fontFamily, settings.lineGap, divideByDays]);
 
   const handleIconMouseDown = (event: React.MouseEvent<HTMLImageElement>, iconKey: string) => {
     event.preventDefault();
@@ -536,7 +707,85 @@ export default function PrintPreview() {
       window.removeEventListener("resize", handleResize);
       cleanupImageListeners.forEach((cleanup) => cleanup());
     };
-  }, [customLines, filters.font_size, settings.fontFamily, settings.lineGap, autoLayoutTick]);
+  }, [customLines, filters.font_size, settings.fontFamily, settings.lineGap, autoLayoutTick, divideByDays]);
+
+  const renderPrintLine = (item: TaskOccurrence, index: number) => {
+    const iconKey = buildIconKey(item, index);
+    const isDragging = draggingKey === iconKey;
+    const isRemoved = removedIconsRef.current.has(iconKey);
+    const showRemoveButton = !isRemoved && iconKey === lastActiveIconKey;
+
+    return (
+      <div
+        key={`${item.task_id}-${index}`}
+        className="print-line"
+        data-icon-key={iconKey}
+        data-line-index={index}
+      >
+        <span className="print-line-text" />
+        <div
+          className="print-line-image"
+          style={{
+            "--icon-offset": "0px",
+            "--icon-width": `${item.icon_width ?? 150}px`,
+          } as CSSProperties}
+          data-icon-key={iconKey}
+        >
+          {item.icon_path && !isRemoved && (
+            <>
+              {showRemoveButton && (
+                <button
+                  type="button"
+                  className="print-icon-remove-button no-print"
+                  title="Remove this icon from the current print preview"
+                  onClick={(event) => handleRemoveIcon(event, iconKey, item.icon_path)}
+                >
+                  <span aria-hidden="true">×</span>
+                  <span className="visually-hidden">Remove icon</span>
+                </button>
+              )}
+              <img
+                src={item.icon_path}
+                alt="Task icon"
+                data-width={item.icon_width ?? 150}
+                data-height={item.icon_height ?? 150}
+                draggable={false}
+                style={{
+                  width: item.icon_width ?? 150,
+                  height: "auto",
+                  cursor: isDragging ? "grabbing" : "grab",
+                }}
+                onMouseDown={(e) => handleIconMouseDown(e, iconKey)}
+                className={isDragging ? "dragging" : ""}
+              />
+            </>
+          )}
+          {item.icon_path && isRemoved && (
+            <button
+              type="button"
+              className="print-icon-restore-button no-print"
+              onClick={(event) => handleRestoreIcon(event, iconKey)}
+            >
+              Restore icon
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderDaySeparator = (date: string) => (
+    <div
+      key={`day-${date}`}
+      className="print-day-separator"
+      data-day-date={date}
+      contentEditable={false}
+      suppressContentEditableWarning
+    >
+      <span className="print-day-separator-rule" aria-hidden="true" />
+      <span className="print-day-separator-label">{formatDayHeader(date)}</span>
+    </div>
+  );
 
   return (
     <div className="print-preview" style={{ gap: "1rem" }}>
@@ -545,82 +794,138 @@ export default function PrintPreview() {
       </div>
 
       <section className="print-controls no-print">
-        <div className="form-field">
-          <label>From date</label>
-          <input
-            type="date"
-            name="from_date"
-            value={filters.from_date}
-            onChange={handleChange}
-          />
-        </div>
-        <div className="form-field">
-          <label>To date</label>
-          <input
-            type="date"
-            name="to_date"
-            value={filters.to_date}
-            onChange={handleChange}
-            min={filters.from_date}
-          />
-        </div>
-        <div className="form-field">
-          <label>Font size</label>
-          <input
-            type="number"
-            name="font_size"
-            min={5}
-            max={72}
-            value={filters.font_size}
-            onChange={handleChange}
-          />
-        </div>
-        <div className="form-field">
-          <label>Line gap (px)</label>
-          <input
-            type="number"
-            min={0}
-            max={48}
-            value={settings.lineGap}
-            onChange={handleGapChange}
-          />
-        </div>
-        <div className="form-field">
-          <label>Font family</label>
-          <select value={settings.fontFamily} onChange={handleFontChange}>
-            <option value="Segoe UI">Segoe UI</option>
-            <option value="Roboto">Roboto</option>
-            <option value="Arial">Arial</option>
-            <option value="Georgia">Georgia</option>
-            <option value="Times New Roman">Times New Roman</option>
-          </select>
-        </div>
-        <button type="button" className="primary-button" onClick={() => window.print()}>
-          Print (A4 portrait)
-        </button>
-        <div className="page-count-indicator" aria-live="polite">
-          Estimated pages: <span>{pageCount}</span>
-        </div>
-        {manualPositionCount > 0 && (
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={handleResetIconPositions}
-            title="Reset all manually positioned icons to automatic positioning"
+        <div className="print-controls-row print-controls-row--settings">
+          <div className="form-field">
+            <label>From date</label>
+            <input
+              type="date"
+              name="from_date"
+              value={filters.from_date}
+              onChange={handleChange}
+            />
+          </div>
+          <div className="form-field">
+            <label>To date</label>
+            <input
+              type="date"
+              name="to_date"
+              value={filters.to_date}
+              onChange={handleChange}
+              min={filters.from_date}
+            />
+          </div>
+          <div className="form-field">
+            <label>Font size</label>
+            <input
+              type="number"
+              name="font_size"
+              min={5}
+              max={72}
+              value={filters.font_size}
+              onChange={handleChange}
+            />
+          </div>
+          <div className="form-field">
+            <label>Line gap (px)</label>
+            <input
+              type="number"
+              min={0}
+              max={48}
+              value={settings.lineGap}
+              onChange={handleGapChange}
+            />
+          </div>
+          <div className="form-field">
+            <label>Font family</label>
+            <select value={settings.fontFamily} onChange={handleFontChange}>
+              <option value="Segoe UI">Segoe UI</option>
+              <option value="Roboto">Roboto</option>
+              <option value="Arial">Arial</option>
+              <option value="Georgia">Georgia</option>
+              <option value="Times New Roman">Times New Roman</option>
+            </select>
+          </div>
+          <div className="form-field form-field-toggle">
+            <span className="form-field-toggle-label" id="divide-by-days-label">
+              Days
+            </span>
+            <div className="print-toggle-wrap">
+              <label className="toggle-switch" htmlFor="divide-by-days">
+                <input
+                  id="divide-by-days"
+                  type="checkbox"
+                  className="toggle-switch-input"
+                  checked={divideByDays}
+                  onChange={(event) => {
+                    setDivideByDays(event.target.checked);
+                    setAutoLayoutTick((tick) => tick + 1);
+                  }}
+                  role="switch"
+                  aria-checked={divideByDays}
+                  aria-labelledby="divide-by-days-label"
+                />
+                <span className="toggle-switch-track" aria-hidden="true" />
+              </label>
+            </div>
+          </div>
+          <div
+            className={`form-field form-field-day-slider${divideByDays ? "" : " is-disabled"}`}
           >
-            Reset Icon Positions ({manualPositionCount})
-          </button>
-        )}
-        {removedIconCount > 0 && (
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={handleRestoreAllIcons}
-            title="Restore all icons that were removed from this preview"
-          >
-            Restore All Icons ({removedIconCount})
-          </button>
-        )}
+            <label htmlFor="day-label-start">
+              Day label position ({settings.dayLabelStartPercent}%)
+            </label>
+            <input
+              id="day-label-start"
+              type="range"
+              min={DAY_LABEL_START_MIN}
+              max={DAY_LABEL_START_MAX}
+              step={1}
+              value={settings.dayLabelStartPercent}
+              onChange={handleDayLabelStartChange}
+              disabled={!divideByDays}
+              style={
+                {
+                  "--day-slider-percent": `${settings.dayLabelStartPercent}%`,
+                } as CSSProperties
+              }
+            />
+          </div>
+        </div>
+
+        <div className="print-controls-row print-controls-row--actions">
+          <div className="print-controls-actions">
+            <div className="page-count-indicator" aria-live="polite">
+              Estimated pages: <span>{pageCount}</span>
+            </div>
+            <button type="button" className="primary-button" onClick={() => window.print()}>
+              Print (A4 portrait)
+            </button>
+            {(manualPositionCount > 0 || removedIconCount > 0) && (
+              <div className="print-controls-secondary">
+                {manualPositionCount > 0 && (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={handleResetIconPositions}
+                    title="Reset all manually positioned icons to automatic positioning"
+                  >
+                    Reset Icon Positions ({manualPositionCount})
+                  </button>
+                )}
+                {removedIconCount > 0 && (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={handleRestoreAllIcons}
+                    title="Restore all icons that were removed from this preview"
+                  >
+                    Restore All Icons ({removedIconCount})
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       </section>
 
       {warning && <div className="warning no-print">{warning}</div>}
@@ -646,65 +951,14 @@ export default function PrintPreview() {
           }}
           onInput={handleEditorInput}
         >
-          {customLines.map((item, index) => {
-            const iconKey = buildIconKey(item, index);
-            const isDragging = draggingKey === iconKey;
-            const isRemoved = removedIconsRef.current.has(iconKey);
-            const showRemoveButton = !isRemoved && iconKey === lastActiveIconKey;
-
-            return (
-              <div key={`${item.task_id}-${index}`} className="print-line">
-                <span className="print-line-text">{item.title}</span>
-                <div
-                  className="print-line-image"
-                  style={{
-                    "--icon-offset": "0px",
-                    "--icon-width": `${item.icon_width ?? 150}px`,
-                  } as CSSProperties}
-                  data-icon-key={iconKey}
-                >
-                  {item.icon_path && !isRemoved && (
-                    <>
-                      {showRemoveButton && (
-                        <button
-                          type="button"
-                          className="print-icon-remove-button no-print"
-                          title="Remove this icon from the current print preview"
-                          onClick={(event) => handleRemoveIcon(event, iconKey, item.icon_path)}
-                        >
-                          <span aria-hidden="true">×</span>
-                          <span className="visually-hidden">Remove icon</span>
-                        </button>
-                      )}
-                      <img
-                        src={item.icon_path}
-                        alt="Task icon"
-                        data-width={item.icon_width ?? 150}
-                        data-height={item.icon_height ?? 150}
-                        draggable={false}
-                        style={{
-                          width: item.icon_width ?? 150,
-                          height: "auto",
-                          cursor: isDragging ? "grabbing" : "grab",
-                        }}
-                        onMouseDown={(e) => handleIconMouseDown(e, iconKey)}
-                        className={isDragging ? "dragging" : ""}
-                      />
-                    </>
-                  )}
-                  {item.icon_path && isRemoved && (
-                    <button
-                      type="button"
-                      className="print-icon-restore-button no-print"
-                      onClick={(event) => handleRestoreIcon(event, iconKey)}
-                    >
-                      Restore icon
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+          {dayGroups
+            ? dayGroups.map((group) => (
+                <Fragment key={group.date}>
+                  {renderDaySeparator(group.date)}
+                  {group.items.map(({ item, index }) => renderPrintLine(item, index))}
+                </Fragment>
+              ))
+            : customLines.map((item, index) => renderPrintLine(item, index))}
         </div>
       </div>
     </div>

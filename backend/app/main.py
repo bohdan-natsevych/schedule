@@ -4,7 +4,7 @@ import time
 from pathlib import Path
 
 from app.database import Base, engine
-from app.routers import google_calendar, overrides, tasks
+from app.routers import google_calendar, overrides, tasks, update
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -33,6 +33,7 @@ app.mount("/uploads", StaticFiles(directory=str(uploads_path)), name="uploads")
 app.include_router(tasks.router)
 app.include_router(overrides.router)
 app.include_router(google_calendar.router)
+app.include_router(update.router)
 
 
 @app.post("/shutdown")
