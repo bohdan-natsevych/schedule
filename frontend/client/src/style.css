@@ -2349,14 +2349,3 @@ textarea {
 .update-checker-message.is-error {
   color: #b91c1c;
 }
-
-.update-checker-button.is-legacy {
-  border-color: #fcd34d;
-  background-color: #fffbeb;
-  color: #92400e;
-}
-
-.update-checker-button.is-legacy:hover:not(:disabled) {
-  background-color: #fef3c7;
-  border-color: #f59e0b;
-}

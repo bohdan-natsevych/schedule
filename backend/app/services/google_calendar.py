@@ -16,8 +16,6 @@ from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from app.services import legacy_install
-
 
 def get_base_path() -> Path:
     """CURSOR: Get base path for credentials - handles both dev and installed modes"""
@@ -44,30 +42,17 @@ def get_data_path() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
-def legacy_credential_dirs() -> List[Path]:
-    """Places an earlier install may have left credentials in. The per-machine
-    install kept them next to its executable, which this process may read but,
-    running unelevated, cannot write to or clean up."""
-    candidates = [get_base_path()]
-    previous_install = legacy_install.install_location()
-    if previous_install:
-        candidates.append(previous_install)
-    return candidates
-
-
 def adopt_legacy_credentials(name: str) -> Path:
     """CLAUDE CODE: Return the data-directory path for a credential file, taking
-    over a copy left behind by an older install first."""
+    over a copy shipped into the program directory by the installer first."""
     data_path = get_data_path() / name
     if data_path.exists():
         return data_path
 
-    for directory in legacy_credential_dirs():
-        source = directory / name
-        if source.exists() and source != data_path:
-            data_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, data_path)
-            break
+    source = get_base_path() / name
+    if source.exists() and source != data_path:
+        data_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, data_path)
     return data_path
 
 

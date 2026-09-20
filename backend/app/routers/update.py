@@ -1,6 +1,5 @@
 from fastapi import APIRouter, HTTPException
 
-from app.services import legacy_install
 from app.services import update as update_service
 from app.version import APP_VERSION
 
@@ -14,7 +13,6 @@ def read_status():
         "installed_version": APP_VERSION,
         "can_install": update_service.is_frozen(),
         "releases_url": update_service.RELEASES_PAGE,
-        "legacy_install": legacy_install.describe(),
     }
 
 
@@ -59,18 +57,3 @@ def install_update():
 
     update_service.quit_after_installer_starts()
     return {"status": "installing", "version": release.version}
-
-
-@router.post("/remove-legacy")
-def remove_legacy_install():
-    """Run the previous per-machine uninstaller, which asks for elevation.
-
-    Refused while the folder that uninstaller deletes still holds files, so the
-    schedule cannot be taken down with it.
-    """
-    try:
-        uninstaller = legacy_install.remove()
-    except legacy_install.LegacyInstallError as error:
-        raise HTTPException(status_code=409, detail=str(error))
-
-    return {"status": "removing", "uninstaller": str(uninstaller)}

@@ -31,17 +31,25 @@ silently, and restarts the application.
 ### Coming from a version installed before 1.0.2
 
 Versions up to 1.0.1 installed per machine into `Program Files` and kept their
-data in `%LOCALAPPDATA%\Schedule Manager`, a folder their uninstaller deletes.
-The first start of a newer version moves that folder to
-`%LOCALAPPDATA%\ScheduleManager` and copies any Google credentials out of the
-old program directory, so nothing of the user's is left where the old
-uninstaller can reach it.
+data in `%LOCALAPPDATA%\Schedule Manager`, a folder their own uninstaller
+deletes.
 
-A **Remove old version** button then appears next to **Check for updates**. It
-runs the old uninstaller, which asks for administrator rights because that
-install was per machine. It refuses to run while anything is still in the old
-data folder, so a migration that did not complete cannot take the schedule with
-it.
+Setup finds that installation and offers to replace it. Choosing **Update**
+does the whole changeover in one run:
+
+1. moves `%LOCALAPPDATA%\Schedule Manager` to `%LOCALAPPDATA%\ScheduleManager`,
+   so nothing of yours is left where the old uninstaller can reach it
+2. copies the Google credentials and saved sign-in out of the old program
+   directory, which that uninstaller also deletes
+3. runs the old uninstaller - Windows asks for permission, because that install
+   was per machine
+4. installs the new version
+
+If the move does not succeed, setup installs the new version but leaves the old
+one in place rather than letting its uninstaller delete what could not be
+moved. Silent runs, which is how the in-app updater installs, never reach step
+3: they migrate the data and leave the old entry alone rather than raising an
+unattended permission prompt.
 
 ### Releasing
 
