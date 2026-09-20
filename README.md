@@ -18,7 +18,7 @@ and run it. It installs for the current user only, into
 `%LOCALAPPDATA%\Programs\ScheduleManager`, and needs no administrator rights.
 
 Your schedule, uploaded images and Google sign-in live in
-`%LOCALAPPDATA%\Schedule Manager` and are never touched by an install, an
+`%LOCALAPPDATA%\ScheduleManager` and are never touched by an install, an
 update or an uninstall.
 
 ### Updating
@@ -27,6 +27,29 @@ Every push to `master` publishes a new release, so the installer only has to be
 downloaded by hand once. After that, use **Check for updates** in the top-right
 corner of the application: it downloads the newest installer, installs it
 silently, and restarts the application.
+
+### Coming from a version installed before 1.0.2
+
+Versions up to 1.0.1 installed per machine into `Program Files` and kept their
+data in `%LOCALAPPDATA%\Schedule Manager`, a folder their own uninstaller
+deletes.
+
+Setup finds that installation and offers to replace it. Choosing **Update**
+does the whole changeover in one run:
+
+1. moves `%LOCALAPPDATA%\Schedule Manager` to `%LOCALAPPDATA%\ScheduleManager`,
+   so nothing of yours is left where the old uninstaller can reach it
+2. copies the Google credentials and saved sign-in out of the old program
+   directory, which that uninstaller also deletes
+3. runs the old uninstaller - Windows asks for permission, because that install
+   was per machine
+4. installs the new version
+
+If the move does not succeed, setup installs the new version but leaves the old
+one in place rather than letting its uninstaller delete what could not be
+moved. Silent runs, which is how the in-app updater installs, never reach step
+3: they migrate the data and leave the old entry alone rather than raising an
+unattended permission prompt.
 
 ### Releasing
 
@@ -115,7 +138,7 @@ The application supports importing events from Google Calendar. This feature req
 2. Follow the [Google Calendar Setup Guide](docs/GOOGLE_CALENDAR_SETUP.md) to create your own OAuth credentials
 3. Replace the placeholder values in `google_credentials.json` with your actual credentials
 
-In an installed copy the file belongs in `%LOCALAPPDATA%\Schedule Manager\`,
+In an installed copy the file belongs in `%LOCALAPPDATA%\ScheduleManager\`,
 next to the database, so that updates leave it and the saved sign-in alone. A
 `google_credentials.json` found in the program directory on startup is copied
 there once, which is what happens to installs made before that folder was used.
