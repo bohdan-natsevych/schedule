@@ -4,11 +4,15 @@ This script launches the backend server and serves the frontend.
 """
 import sys
 import os
+import shutil
 import webbrowser
 import socket
 from pathlib import Path
 import uvicorn
 from threading import Timer
+
+APP_DATA_DIR_NAME = "ScheduleManager"
+LEGACY_APP_DATA_DIR_NAME = "Schedule Manager"
 
 
 def open_browser(port: int) -> None:
@@ -42,7 +46,7 @@ def get_app_data_path():
         # Running as compiled executable - store data in LocalAppData
         local_app_data = os.environ.get('LOCALAPPDATA')
         if local_app_data:
-            return Path(local_app_data) / "Schedule Manager"
+            return Path(local_app_data) / APP_DATA_DIR_NAME
         else:
             # Fallback to user's home directory
             return Path.home() / ".schedule-manager"
@@ -51,19 +55,53 @@ def get_app_data_path():
         return Path(__file__).parent
 
 
+def get_legacy_app_data_path():
+    """CLAUDE CODE: Where installs before the per-user move kept their data.
+    The per-machine uninstaller deletes that folder, so the data cannot stay in
+    it if the old version is ever to be removed."""
+    if getattr(sys, 'frozen', False):
+        local_app_data = os.environ.get('LOCALAPPDATA')
+        if local_app_data:
+            return Path(local_app_data) / LEGACY_APP_DATA_DIR_NAME
+    return None
+
+
+def migrate_legacy_app_data():
+    """Take over the previous data folder, emptying it so the old uninstaller
+    has nothing of the user's left to delete."""
+    legacy = get_legacy_app_data_path()
+    target = get_app_data_path()
+    if legacy is None or not legacy.is_dir() or target.exists():
+        return
+
+    try:
+        shutil.move(str(legacy), str(target))
+        print(f"Moved existing data from {legacy} to {target}")
+    except OSError as error:
+        # CLAUDE CODE: a rename fails across volumes or on a locked file. The
+        # copy still rescues the data; what stays behind then blocks removal of
+        # the old version rather than being silently deleted with it.
+        print(f"Could not move {legacy} ({error}); copying instead")
+        shutil.copytree(legacy, target, dirs_exist_ok=True)
+
+
 def main():
     base_path = get_base_path()
+    # CLAUDE CODE: must run before anything creates the new folder, or the
+    # migration sees it as already populated and leaves the old data behind.
+    migrate_legacy_app_data()
     app_data_path = get_app_data_path()
-    
+
     # Create uploads directory in app data location
     uploads_path = app_data_path / "uploads"
     uploads_path.mkdir(parents=True, exist_ok=True)
-    
+
     # Set database path environment variable BEFORE importing app
     db_path = app_data_path / "backend"
     db_path.mkdir(parents=True, exist_ok=True)
     os.environ['DATABASE_PATH'] = str(db_path / "schedule.db")
     os.environ['UPLOADS_PATH'] = str(uploads_path)
+    os.environ['APP_DATA_PATH'] = str(app_data_path)
     
     # Set up paths
     backend_path = base_path / "backend"

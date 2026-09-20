@@ -31,23 +31,28 @@ def get_data_path() -> Path:
     """CLAUDE CODE: Where the sign-in is kept. An in-app update reinstalls the
     program directory, so anything stored there is lost on every update; this
     sits beside the database instead, which no install ever touches."""
+    configured = os.environ.get('APP_DATA_PATH')
+    if configured:
+        return Path(configured)
     if getattr(sys, 'frozen', False):
         local_app_data = os.environ.get('LOCALAPPDATA')
         if local_app_data:
-            return Path(local_app_data) / "Schedule Manager"
+            return Path(local_app_data) / "ScheduleManager"
         return Path.home() / ".schedule-manager"
     return Path(__file__).resolve().parents[3]
 
 
-def adopt_from_install_dir(name: str) -> Path:
+def adopt_legacy_credentials(name: str) -> Path:
     """CLAUDE CODE: Return the data-directory path for a credential file, taking
-    over a copy left in the program directory by an older install first."""
+    over a copy shipped into the program directory by the installer first."""
     data_path = get_data_path() / name
-    if not data_path.exists():
-        legacy = get_base_path() / name
-        if legacy.exists() and legacy != data_path:
-            data_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(legacy, data_path)
+    if data_path.exists():
+        return data_path
+
+    source = get_base_path() / name
+    if source.exists() and source != data_path:
+        data_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, data_path)
     return data_path
 
 
@@ -57,8 +62,8 @@ SCOPES = [
     'https://www.googleapis.com/auth/calendar.events'
 ]
 
-TOKEN_PATH = adopt_from_install_dir("google_token.pickle")
-CREDENTIALS_PATH = adopt_from_install_dir("google_credentials.json")
+TOKEN_PATH = adopt_legacy_credentials("google_token.pickle")
+CREDENTIALS_PATH = adopt_legacy_credentials("google_credentials.json")
 
 # Redirect URI for OAuth2
 REDIRECT_URI = "http://localhost:8000/google-calendar/oauth2callback"
