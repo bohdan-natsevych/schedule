@@ -68,6 +68,11 @@ CREDENTIALS_PATH = adopt_legacy_credentials("google_credentials.json")
 # Redirect URI for OAuth2
 REDIRECT_URI = "http://localhost:8000/google-calendar/oauth2callback"
 
+# CLAUDE CODE: include_granted_scopes lets Google answer with the scopes in a
+# different order or with ones granted earlier; without this oauthlib treats
+# that as an error and the sign-in fails.
+os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
+
 
 class GoogleCalendarService:
     """Service for managing Google Calendar integration."""
@@ -75,6 +80,10 @@ class GoogleCalendarService:
     def __init__(self):
         self.creds: Optional[Credentials] = None
         self.service = None
+        # CLAUDE CODE: google-auth-oauthlib adds PKCE to the sign-in link, so the
+        # code Google sends back can only be exchanged with the verifier that
+        # link was made with. Keep it, by OAuth state, until the callback.
+        self._code_verifiers: Dict[str, str] = {}
     
     def get_authorization_url(self) -> str:
         """
@@ -94,12 +103,14 @@ class GoogleCalendarService:
                 redirect_uri=REDIRECT_URI
             )
             
-            auth_url, _ = flow.authorization_url(
+            auth_url, state = flow.authorization_url(
                 access_type='offline',
                 include_granted_scopes='true',
                 prompt='consent'
             )
-            
+            if flow.code_verifier:
+                self._code_verifiers[state] = flow.code_verifier
+
             return auth_url
         except Exception as e:
             print(f"Error creating authorization URL: {e}")
@@ -107,28 +118,38 @@ class GoogleCalendarService:
             traceback.print_exc()
             raise Exception(f"Failed to create authorization URL: {str(e)}")
     
-    def exchange_code_for_token(self, code: str) -> bool:
+    def exchange_code_for_token(self, code: str, state: Optional[str] = None) -> bool:
         """
         Exchange the authorization code for access token.
         Returns True if successful.
         """
         try:
+            code_verifier = self._code_verifiers.pop(state, None) if state else None
+            if code_verifier is None and len(self._code_verifiers) == 1:
+                # CLAUDE CODE: Only one sign-in is under way, so it is this one.
+                code_verifier = self._code_verifiers.popitem()[1]
+
             flow = Flow.from_client_secrets_file(
                 str(CREDENTIALS_PATH),
                 scopes=SCOPES,
-                redirect_uri=REDIRECT_URI
+                redirect_uri=REDIRECT_URI,
+                code_verifier=code_verifier,
+                autogenerate_code_verifier=False,
             )
-            
+
             flow.fetch_token(code=code)
             self.creds = flow.credentials
-            
+
             # Save credentials
+            TOKEN_PATH.parent.mkdir(parents=True, exist_ok=True)
             with open(TOKEN_PATH, 'wb') as token_file:
                 pickle.dump(self.creds, token_file)
-            
+
             return True
         except Exception as e:
             print(f"Error exchanging code for token: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def load_credentials(self) -> bool:

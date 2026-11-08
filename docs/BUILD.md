@@ -55,7 +55,7 @@ If you prefer to build manually:
 ```bash
 cd backend
 pip install -r requirements.txt
-pip install pyinstaller
+pip install -r build-requirements.txt
 cd ..
 ```
 
@@ -94,8 +94,32 @@ Share `Output\ScheduleManagerSetup.exe`. Users run it to install the application
 - Ensure Node.js and npm are installed: `npm --version`
 - Try deleting `node_modules` and `package-lock.json`, then run `npm install` again
 
+### Updating Python Dependencies
+
+Every Python package is pinned to an exact version, so each build and each
+release gets the same libraries. A new version of a library can change its
+behaviour without warning (an unpinned `google-auth-oauthlib` once broke the
+Google Calendar sign-in), so versions only change when someone changes them.
+
+- `backend/requirements.in` and `backend/build-requirements.in` list the
+  packages the app and the build need directly. Edit these by hand.
+- `backend/requirements.txt` and `backend/build-requirements.txt` are generated
+  from them and pin every package, including indirect ones, for Windows and
+  Python 3.11 (what the release build uses). Do not edit them by hand.
+
+After changing a `.in` file, or to move to newer versions, regenerate the pins
+with [uv](https://docs.astral.sh/uv/) from the project root, then test the app
+(including connecting Google Calendar) before committing:
+
+```bash
+uv pip compile backend/requirements.in -o backend/requirements.txt --python-version 3.11 --python-platform windows --upgrade
+uv pip compile backend/build-requirements.in -o backend/build-requirements.txt --python-version 3.11 --python-platform windows --upgrade
+```
+
+Leave out `--upgrade` to keep the existing versions and only add what changed.
+
 ### PyInstaller Fails
-- Update PyInstaller: `pip install --upgrade pyinstaller`
+- Reinstall the pinned build tools: `pip install -r backend/build-requirements.txt`
 - Check Python version: `python --version` (should be 3.8+)
 - Try running with admin privileges
 
