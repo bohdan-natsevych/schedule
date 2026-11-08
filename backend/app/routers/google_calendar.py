@@ -100,7 +100,7 @@ def oauth2_callback(request: Request, code: str = Query(...), state: Optional[st
     Google redirects here after user authorizes the app.
     """
     service = get_google_calendar_service()
-    success = service.exchange_code_for_token(code)
+    success = service.exchange_code_for_token(code, state)
     
     # CURSOR: Get base URL from request to redirect to correct port (dev or production)
     base_url = f"{request.url.scheme}://{request.url.netloc}"
