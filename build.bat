@@ -25,7 +25,7 @@ if %errorlevel% neq 0 (
 echo Step 1: Installing Python dependencies...
 python -m pip install --upgrade pip
 python -m pip install -r backend\requirements.txt
-python -m pip install pyinstaller
+python -m pip install -r backend\build-requirements.txt
 
 echo.
 echo Step 2: Building frontend...
